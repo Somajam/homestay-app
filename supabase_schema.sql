@@ -11,9 +11,15 @@ CREATE TABLE IF NOT EXISTS public.rooms (
   capacity INT NOT NULL DEFAULT 4,
   facilities TEXT[] DEFAULT '{}',
   status TEXT NOT NULL DEFAULT 'Available',
+  weekday_rate NUMERIC NOT NULL DEFAULT 3500,
+  weekend_rate NUMERIC NOT NULL DEFAULT 4500,
   price_per_night NUMERIC NOT NULL DEFAULT 3500,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure columns exist if table was already created
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS weekday_rate NUMERIC DEFAULT 3500;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS weekend_rate NUMERIC DEFAULT 4500;
 
 -- 2. Create Guests Master Table
 CREATE TABLE IF NOT EXISTS public.guests (
@@ -139,39 +145,36 @@ CREATE POLICY "Allow storage read write" ON storage.objects
 FOR ALL USING (bucket_id = 'guest-documents') WITH CHECK (bucket_id = 'guest-documents');
 
 -- ====================================================================
--- SEED INITIAL DATA (SOMAJAM HOLIDAYS 5 1BHK ROOMS & RECORDS)
+-- SEED MASTER DATA ONLY (5 1BHK COTTAGES, STAFF & EXPENSE PAYERS)
+-- Transaction data (Guests, Bookings, Expenses, Documents) starts empty for live testing
 -- ====================================================================
 
--- Seed Rooms (No. 1 to No. 5)
-INSERT INTO public.rooms (id, room_number, room_type, capacity, facilities, status, price_per_night) VALUES
-('room-1', 'No. 1', '1BHK Cottage', 4, ARRAY['Swimming Pool Access', 'Free Wi-Fi', 'EV Charging', 'Kitchenette', 'Audio System', 'Grilling Area'], 'Available', 3500),
-('room-2', 'No. 2', '1BHK Cottage', 4, ARRAY['Swimming Pool Access', 'Free Wi-Fi', 'EV Charging', 'Kitchenette', 'Valley View Patio', 'Campfire Zone'], 'Occupied', 3500),
-('room-3', 'No. 3', '1BHK Cottage', 4, ARRAY['Swimming Pool Access', 'Free Wi-Fi', 'EV Charging', 'Kitchenette', 'Private Balcony', 'Hot Shower'], 'Occupied', 3500),
-('room-4', 'No. 4', '1BHK Cottage', 4, ARRAY['Swimming Pool Access', 'Free Wi-Fi', 'EV Charging', 'Kitchenette', 'Drivers Lounge Access', 'Audio System'], 'Available', 3500),
-('room-5', 'No. 5', '1BHK Cottage', 5, ARRAY['Swimming Pool Access', 'Free Wi-Fi', 'EV Charging', 'Full Kitchen', 'Campfire Area', 'Mountain View'], 'Available', 4000)
-ON CONFLICT (id) DO NOTHING;
+-- OPTIONAL CLEANUP SCRIPT: Run below statements to wipe existing dummy records from Supabase:
+-- TRUNCATE TABLE public.bookings CASCADE;
+-- TRUNCATE TABLE public.guests CASCADE;
+-- TRUNCATE TABLE public.expenses CASCADE;
+-- TRUNCATE TABLE public.documents CASCADE;
+-- UPDATE public.rooms SET status = 'Available';
 
--- Seed Guests
-INSERT INTO public.guests (id, full_name, phone, email, address, nationality, id_document_type, id_document_number, notes) VALUES
-('gst-101', 'Rajesh Kumar', '+91 98470 12345', 'rajesh.k@gmail.com', 'Panampilly Nagar, Kochi, Kerala', 'Indian', 'Aadhaar', '5489 1234 8901', 'Arriving around 4:00 PM. Requested tea kit.'),
-('gst-102', 'Sarah Jenkins', '+44 7700 900077', 'sarah.jenkins@outlook.com', '24 Kensington High St, London, UK', 'British', 'Passport', 'GB98234109', 'Vegetarian breakfast. Interested in hill trek.'),
-('gst-103', 'Dr. Ananya Roy', '+91 98300 45678', 'ananya.roy@aiims.edu', 'Salt Lake City, Kolkata, West Bengal', 'Indian', 'Aadhaar', '7812 6543 9012', 'Needs fast Wi-Fi for remote work.')
-ON CONFLICT (id) DO NOTHING;
+-- Seed Rooms Master Configuration (No. 1 to No. 5 - all Available)
+INSERT INTO public.rooms (id, room_number, room_type, capacity, facilities, status, weekday_rate, weekend_rate, price_per_night) VALUES
+('room-1', 'No. 1', '1BHK Cottage', 4, ARRAY['Swimming Pool Access', 'Free Wi-Fi', 'EV Charging', 'Kitchenette', 'Audio System', 'Grilling Area'], 'Available', 3500, 4500, 3500),
+('room-2', 'No. 2', '1BHK Cottage', 4, ARRAY['Swimming Pool Access', 'Free Wi-Fi', 'EV Charging', 'Kitchenette', 'Valley View Patio', 'Campfire Zone'], 'Available', 3500, 4500, 3500),
+('room-3', 'No. 3', '1BHK Cottage', 4, ARRAY['Swimming Pool Access', 'Free Wi-Fi', 'EV Charging', 'Kitchenette', 'Private Balcony', 'Hot Shower'], 'Available', 3500, 4500, 3500),
+('room-4', 'No. 4', '1BHK Cottage', 4, ARRAY['Swimming Pool Access', 'Free Wi-Fi', 'EV Charging', 'Kitchenette', 'Drivers Lounge Access', 'Audio System'], 'Available', 3500, 4500, 3500),
+('room-5', 'No. 5', '1BHK Cottage', 5, ARRAY['Swimming Pool Access', 'Free Wi-Fi', 'EV Charging', 'Full Kitchen', 'Campfire Area', 'Mountain View'], 'Available', 4000, 5000, 4000)
+ON CONFLICT (id) DO UPDATE SET
+  weekday_rate = EXCLUDED.weekday_rate,
+  weekend_rate = EXCLUDED.weekend_rate,
+  status = EXCLUDED.status;
 
--- Seed Bookings
-INSERT INTO public.bookings (id, booking_ref, guest_id, guest_name, room_id, room_number, check_in_date, check_out_date, num_guests, status, notes) VALUES
-('bkg-001', 'SJM-2026-001', 'gst-102', 'Sarah Jenkins', 'room-2', 'No. 2', '2026-08-17', '2026-08-20', 2, 'Checked In', 'Checked in at 11:30 AM. Passport scanned.'),
-('bkg-002', 'SJM-2026-002', 'gst-103', 'Dr. Ananya Roy', 'room-3', 'No. 3', '2026-08-17', '2026-08-19', 1, 'Checked In', 'Checked in early at 10:00 AM.'),
-('bkg-003', 'SJM-2026-003', 'gst-101', 'Rajesh Kumar', 'room-1', 'No. 1', '2026-08-17', '2026-08-18', 1, 'Confirmed', 'Confirmed via phone. Expected check-in at 4:00 PM.')
-ON CONFLICT (id) DO NOTHING;
-
--- Seed Staff
+-- Seed Staff Master List
 INSERT INTO public.staff_list (id, full_name, role, title, email, phone, status) VALUES
 ('stf-001', 'Somajam Management Team', 'admin', 'Property Manager', 'somajamholidays@gmail.com', '+91 92499 59035', 'Active'),
 ('stf-002', 'Front Desk Staff', 'staff', 'Guest Associate', 'help@somajamholidays.com', '+91 92499 59035', 'Active')
 ON CONFLICT (id) DO NOTHING;
 
--- Seed Expense Payers (5 Directors, 1 Caretaker, 1 Common Bucket)
+-- Seed Expense Payers Master List (5 Directors, 1 Caretaker, 1 Common Bucket)
 INSERT INTO public.expense_payers (id, name, group_tag, phone, upi_id) VALUES
 ('pyr-common', 'Common Homestay Account', 'Common Pool', '+91 92499 59035', 'somajam@upi'),
 ('pyr-dir1', 'Director 1 (Ramesh)', 'Director', '+91 98470 11111', 'ramesh@upi'),
@@ -180,14 +183,5 @@ INSERT INTO public.expense_payers (id, name, group_tag, phone, upi_id) VALUES
 ('pyr-dir4', 'Director 4 (Anish)', 'Director', '+91 98470 44444', 'anish@upi'),
 ('pyr-dir5', 'Director 5 (Deepa)', 'Director', '+91 98470 55555', 'deepa@upi'),
 ('pyr-caretaker', 'Caretaker (Joy)', 'Caretaker', '+91 92499 59000', 'joycaretaker@upi')
-ON CONFLICT (id) DO NOTHING;
-
--- Seed Sample Expenses
-INSERT INTO public.expenses (id, expense_date, payer_id, payer_name, category, amount, payment_method, description, reimbursement_status) VALUES
-('exp-001', '2026-08-10', 'pyr-common', 'Common Homestay Account', 'Utilities', 4850, 'Bank Transfer', 'KSEB Monthly Electricity Bill for 5 Cottages', 'Settled'),
-('exp-002', '2026-08-12', 'pyr-caretaker', 'Caretaker (Joy)', 'Maintenance', 1200, 'Cash', 'Emergency plumbing washer and pipe joint replacement', 'Pending Reimbursement'),
-('exp-003', '2026-08-14', 'pyr-dir1', 'Director 1 (Ramesh)', 'Guest Amenities', 3500, 'UPI', 'Bulk campfire wood supply (2 loads)', 'Pending Reimbursement'),
-('exp-004', '2026-08-15', 'pyr-dir3', 'Director 3 (George)', 'Food & Kitchen', 2200, 'UPI', 'Guest welcome tea & coffee kit refresh', 'Settled'),
-('exp-005', '2026-08-16', 'pyr-common', 'Common Homestay Account', 'Utilities', 1499, 'UPI', 'BSNL High-speed Fiber Wi-Fi monthly subscription', 'Settled')
 ON CONFLICT (id) DO NOTHING;
 

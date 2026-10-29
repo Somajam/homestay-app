@@ -9,6 +9,20 @@ import {
   initialExpensePayers,
   initialExpenses,
 } from '../data/initialData';
+import { calculateStayRate } from '../utils/pricing';
+
+export const normalizeRoom = (r) => {
+  if (!r) return r;
+  const weekday = Number(r.weekday_rate ?? r.price_per_night ?? 3500);
+  const weekend = Number(r.weekend_rate ?? (r.weekday_rate ? Math.round(r.weekday_rate * 1.25) : 4500));
+  return {
+    ...r,
+    weekday_rate: weekday,
+    weekend_rate: weekend,
+    price_per_night: weekday,
+    facilities: Array.isArray(r.facilities) ? r.facilities : [],
+  };
+};
 
 const AppContext = createContext();
 
@@ -91,16 +105,41 @@ export const AppProvider = ({ children }) => {
     showToast('Logged out successfully', 'info');
   };
 
+  // One-time clean slate migration: purge dummy test transaction data from localStorage
+  const DATA_CLEAN_VERSION = 'v1_production_clean_slate';
+  try {
+    if (localStorage.getItem('somajam_clean_version') !== DATA_CLEAN_VERSION) {
+      localStorage.removeItem('somajam_bookings');
+      localStorage.removeItem('somajam_guests');
+      localStorage.removeItem('somajam_documents');
+      localStorage.removeItem('somajam_expenses');
+
+      // Reset all room statuses to Available in local cache
+      const cachedRooms = localStorage.getItem('somajam_rooms');
+      if (cachedRooms) {
+        const parsed = JSON.parse(cachedRooms);
+        if (Array.isArray(parsed)) {
+          const resetRooms = parsed.map((r) => ({
+            ...normalizeRoom(r),
+            status: 'Available',
+          }));
+          localStorage.setItem('somajam_rooms', JSON.stringify(resetRooms));
+        }
+      }
+      localStorage.setItem('somajam_clean_version', DATA_CLEAN_VERSION);
+    }
+  } catch (e) {}
+
   // Master States with LocalStorage Cache
   const [rooms, setRooms] = useState(() => {
     try {
       const saved = localStorage.getItem('somajam_rooms');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.map(normalizeRoom);
       }
     } catch (e) {}
-    return initialRooms;
+    return initialRooms.map(normalizeRoom);
   });
 
   const [guests, setGuests] = useState(() => {
@@ -178,7 +217,7 @@ export const AppProvider = ({ children }) => {
         // Fetch Rooms
         const { data: roomsData, error: roomsErr } = await supabase.from('rooms').select('*');
         if (!roomsErr && roomsData && roomsData.length > 0) {
-          setRooms(roomsData);
+          setRooms(roomsData.map(normalizeRoom));
         }
 
         // Fetch Guests
@@ -246,12 +285,22 @@ export const AppProvider = ({ children }) => {
 
   // --- ROOM HANDLERS ---
   const addRoom = async (roomData) => {
+    const weekday = Number(roomData.weekday_rate ?? roomData.price_per_night ?? 3500);
+    const weekend = Number(roomData.weekend_rate ?? Math.round(weekday * 1.25));
     const newRoom = {
       id: `room-${Date.now()}`,
       status: 'Available',
       ...roomData,
+      weekday_rate: weekday,
+      weekend_rate: weekend,
+      price_per_night: weekday,
+      facilities: Array.isArray(roomData.facilities) ? roomData.facilities : [],
     };
-    setRooms((prev) => [newRoom, ...prev]);
+    setRooms((prev) => {
+      const updated = [newRoom, ...prev];
+      try { localStorage.setItem('somajam_rooms', JSON.stringify(updated)); } catch(e){}
+      return updated;
+    });
 
     try {
       await supabase.from('rooms').insert([newRoom]);
@@ -259,6 +308,48 @@ export const AppProvider = ({ children }) => {
       console.error(e);
     }
     showToast(`Room ${newRoom.room_number} created successfully`);
+    return newRoom;
+  };
+
+  const updateRoom = async (roomId, updatedData) => {
+    let updatedName = '';
+    setRooms((prev) => {
+      const updated = prev.map((r) => {
+        if (r.id === roomId) {
+          const weekday = Number(updatedData.weekday_rate ?? r.weekday_rate ?? r.price_per_night ?? 3500);
+          const weekend = Number(updatedData.weekend_rate ?? r.weekend_rate ?? 4500);
+          updatedName = updatedData.room_number || r.room_number;
+          return {
+            ...r,
+            ...updatedData,
+            weekday_rate: weekday,
+            weekend_rate: weekend,
+            price_per_night: weekday,
+            facilities: Array.isArray(updatedData.facilities) ? updatedData.facilities : (r.facilities || []),
+          };
+        }
+        return r;
+      });
+      try { localStorage.setItem('somajam_rooms', JSON.stringify(updated)); } catch(e){}
+      return updated;
+    });
+
+    try {
+      await supabase.from('rooms').update({
+        room_number: updatedData.room_number,
+        room_type: updatedData.room_type,
+        capacity: Number(updatedData.capacity),
+        facilities: updatedData.facilities,
+        weekday_rate: Number(updatedData.weekday_rate),
+        weekend_rate: Number(updatedData.weekend_rate),
+        price_per_night: Number(updatedData.weekday_rate || updatedData.price_per_night),
+      }).eq('id', roomId);
+    } catch (e) {
+      console.warn('Supabase update room notice:', e);
+    }
+
+    showToast(`Room ${updatedName} updated successfully!`);
+    return true;
   };
 
   const updateRoomStatus = async (roomId, newStatus) => {
@@ -449,6 +540,7 @@ export const AppProvider = ({ children }) => {
       const room = rooms.find((r) => r.id === rId);
       const suffix = roomIds.length > 1 ? `-${String.fromCharCode(65 + idx)}` : '';
       const refNum = `SJM-2026-${String(bookings.length + 1 + idx).padStart(3, '0')}${suffix}`;
+      const stayPricing = calculateStayRate(room, check_in_date, check_out_date);
 
       const newBooking = {
         id: `bkg-${Date.now()}-${idx}`,
@@ -462,6 +554,12 @@ export const AppProvider = ({ children }) => {
         num_guests: Number(bookingData.num_guests) || (room ? room.capacity : 2),
         status: finalStatus,
         notes: bookingData.notes || '',
+        weekday_nights: stayPricing.weekdayNights,
+        weekend_nights: stayPricing.weekendNights,
+        total_nights: stayPricing.totalNights,
+        weekday_rate: stayPricing.weekdayRate,
+        weekend_rate: stayPricing.weekendRate,
+        total_amount: Number(bookingData.total_amount) || stayPricing.totalAmount,
         created_at: new Date().toISOString(),
       };
 
@@ -866,6 +964,7 @@ export const AppProvider = ({ children }) => {
         toggleRole: () => {},
         rooms,
         addRoom,
+        updateRoom,
         updateRoomStatus,
         guests,
         addGuest,

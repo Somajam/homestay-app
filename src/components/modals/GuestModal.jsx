@@ -21,7 +21,11 @@ import {
   ShieldCheck,
   Camera,
   Zap,
+  Sun,
+  Moon,
+  Sparkles,
 } from 'lucide-react';
+import { calculateStayRate } from '../../utils/pricing';
 
 export const GuestModal = ({ isOpen, onClose, guestToEdit = null }) => {
   const { rooms, documents, addGuest, updateGuest, addBooking, addDocument, deleteDocument, showToast } = useApp();
@@ -137,6 +141,9 @@ export const GuestModal = ({ isOpen, onClose, guestToEdit = null }) => {
 
     // If a room is selected in 1-Step Booking, create the reservation!
     if (!guestToEdit && formData.room_id && targetGuestId) {
+      const targetRoom = rooms.find((r) => r.id === formData.room_id);
+      const stayPricing = calculateStayRate(targetRoom, formData.check_in_date, formData.check_out_date);
+
       await addBooking({
         guest_id: targetGuestId,
         guest_name: targetGuestName,
@@ -146,6 +153,7 @@ export const GuestModal = ({ isOpen, onClose, guestToEdit = null }) => {
         num_guests: parseInt(formData.num_guests, 10) || 2,
         booking_status: formData.booking_status || 'Confirmed',
         notes: formData.notes || '',
+        total_amount: stayPricing.totalAmount,
       });
     }
 
@@ -426,7 +434,7 @@ export const GuestModal = ({ isOpen, onClose, guestToEdit = null }) => {
                     <option value="">-- Select Room (1BHK Cottage) --</option>
                     {rooms.map((r) => (
                       <option key={r.id} value={r.id}>
-                        Room {r.room_number} ({r.status}) - ₹{r.price_per_night}/night
+                        Cottage {r.room_number} ({r.status}) — Wkday: ₹{r.weekday_rate || r.price_per_night} / Wkend: ₹{r.weekend_rate || r.price_per_night}
                       </option>
                     ))}
                   </select>
@@ -478,6 +486,30 @@ export const GuestModal = ({ isOpen, onClose, guestToEdit = null }) => {
                   />
                 </div>
               </div>
+
+              {/* Stay Rate Estimate Preview */}
+              {(() => {
+                const selRoom = rooms.find((r) => r.id === formData.room_id);
+                const calc = selRoom && formData.check_in_date && formData.check_out_date
+                  ? calculateStayRate(selRoom, formData.check_in_date, formData.check_out_date)
+                  : null;
+
+                if (!calc || calc.totalNights <= 0) return null;
+
+                return (
+                  <div className="p-2.5 rounded-xl bg-slate-900 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                    <div className="flex items-center gap-1.5 text-emerald-300 font-medium">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>
+                        {calc.totalNights} Night{calc.totalNights > 1 ? 's' : ''}: {calc.weekdayNights} Wkday (Sun–Thu) + {calc.weekendNights} Wkend (Fri–Sat)
+                      </span>
+                    </div>
+                    <div className="font-mono font-bold text-emerald-400">
+                      Est. Total: ₹{calc.totalAmount.toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">

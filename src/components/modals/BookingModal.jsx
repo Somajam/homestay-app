@@ -23,7 +23,11 @@ import {
   AlertCircle,
   Users,
   Check,
+  Sun,
+  Moon,
+  Sparkles,
 } from 'lucide-react';
+import { calculateMultiRoomStayRate } from '../../utils/pricing';
 
 export const BookingModal = ({ isOpen, onClose }) => {
   const { guests, rooms, bookings, documents, addGuest, addBooking, addDocument, showToast } = useApp();
@@ -105,6 +109,16 @@ export const BookingModal = ({ isOpen, onClose }) => {
     });
     return map;
   }, [rooms, bookings, checkInDate, checkOutDate]);
+
+  // Selected rooms objects
+  const selectedRoomsList = useMemo(() => {
+    return rooms.filter((r) => selectedRoomIds.includes(r.id));
+  }, [rooms, selectedRoomIds]);
+
+  // Multi-room stay rate calculation based on weekday vs weekend nights
+  const stayCalculation = useMemo(() => {
+    return calculateMultiRoomStayRate(selectedRoomsList, checkInDate, checkOutDate);
+  }, [selectedRoomsList, checkInDate, checkOutDate]);
 
   // Check if phone or name matches an existing guest in database (in Quick or Detailed mode)
   const matchingExistingGuest = useMemo(() => {
@@ -278,6 +292,7 @@ export const BookingModal = ({ isOpen, onClose }) => {
       num_guests: parseInt(numGuests, 10),
       booking_status: bookingStatusToUse,
       notes: notes,
+      total_amount: stayCalculation.totalAmount,
     });
 
     if (!success) {
@@ -742,7 +757,15 @@ export const BookingModal = ({ isOpen, onClose }) => {
                         </div>
                         <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
                           <Users className="w-3 h-3 text-slate-500" />
-                          Max: {r.capacity} Guests • ₹{r.price_per_night || 3500}/night
+                          Max: {r.capacity} Guests
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] mt-1 font-mono">
+                          <span className="text-amber-400 flex items-center gap-0.5">
+                            <Sun className="w-2.5 h-2.5" /> ₹{Number(r.weekday_rate || r.price_per_night || 3500).toLocaleString('en-IN')}<span className="text-[9px] text-slate-500">/wkday</span>
+                          </span>
+                          <span className="text-teal-400 flex items-center gap-0.5">
+                            <Moon className="w-2.5 h-2.5" /> ₹{Number(r.weekend_rate || r.price_per_night || 4500).toLocaleString('en-IN')}<span className="text-[9px] text-slate-500">/wkend</span>
+                          </span>
                         </div>
                       </div>
 
@@ -779,6 +802,64 @@ export const BookingModal = ({ isOpen, onClose }) => {
                 );
               })}
             </div>
+
+            {/* Stay Pricing Calculation Breakdown */}
+            {selectedRoomsList.length > 0 && stayCalculation.totalNights > 0 && (
+              <div className="p-3.5 rounded-xl bg-slate-950/90 border border-emerald-500/30 space-y-2.5 mt-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-100">
+                        Stay Pricing Calculation & Breakdown
+                      </h4>
+                      <p className="text-[10px] text-slate-400">
+                        Calculated from {checkInDate} to {checkOutDate} ({stayCalculation.totalNights} night{stayCalculation.totalNights > 1 ? 's' : ''})
+                      </p>
+                    </div>
+                  </div>
+                  <div className="sm:text-right bg-emerald-950/40 px-3 py-1.5 rounded-lg border border-emerald-500/20">
+                    <span className="text-[10px] text-slate-400 block sm:inline mr-1">Total Stay Rate:</span>
+                    <span className="text-sm font-bold text-emerald-400 font-mono">
+                      ₹{stayCalculation.totalAmount.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Night type counters */}
+                <div className="flex flex-wrap gap-2 text-[11px]">
+                  {stayCalculation.weekdayNights > 0 && (
+                    <div className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-1.5 font-medium">
+                      <Sun className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{stayCalculation.weekdayNights} Weekday Night{stayCalculation.weekdayNights > 1 ? 's' : ''} (Sun–Thu)</span>
+                    </div>
+                  )}
+                  {stayCalculation.weekendNights > 0 && (
+                    <div className="px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-300 flex items-center gap-1.5 font-medium">
+                      <Moon className="w-3.5 h-3.5 text-teal-400" />
+                      <span>{stayCalculation.weekendNights} Weekend Night{stayCalculation.weekendNights > 1 ? 's' : ''} (Fri–Sat)</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Detailed per-cottage rate if multiple */}
+                {selectedRoomsList.length > 1 && (
+                  <div className="pt-1.5 border-t border-slate-900 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                    {stayCalculation.roomsBreakdown.map((rb) => (
+                      <div key={rb.roomId} className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800/80">
+                        <span className="text-slate-300 font-semibold">Cottage {rb.roomNumber}:</span>
+                        <div className="text-right">
+                          <span className="font-mono font-bold text-slate-200">₹{rb.totalAmount.toLocaleString('en-IN')}</span>
+                          <span className="text-[10px] text-slate-500 block">
+                            ({rb.weekdayNights} wkday @ ₹{rb.weekdayRate} + {rb.weekendNights} wkend @ ₹{rb.weekendRate})
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Guest Count & Notes */}

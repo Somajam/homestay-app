@@ -17,6 +17,7 @@ import {
   CheckCircle,
   List,
 } from 'lucide-react';
+import { calculateStayRate } from '../utils/pricing';
 
 export const Bookings = () => {
   const { bookings, rooms, cancelBooking } = useApp();
@@ -224,6 +225,17 @@ export const Bookings = () => {
                         <span className="text-slate-500">→</span>
                         <span>{b.check_out_date}</span>
                       </div>
+                      {(() => {
+                        const totalAmt = b.total_amount || (() => {
+                          const room = rooms.find((r) => r.id === b.room_id || r.room_number === b.room_number);
+                          return room ? calculateStayRate(room, b.check_in_date, b.check_out_date).totalAmount : null;
+                        })();
+                        return totalAmt ? (
+                          <div className="text-[10px] text-emerald-400 font-mono mt-0.5 font-semibold">
+                            ₹{totalAmt.toLocaleString('en-IN')}
+                          </div>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="p-4 text-slate-300">{b.num_guests} Person(s)</td>
                     <td className="p-4">
