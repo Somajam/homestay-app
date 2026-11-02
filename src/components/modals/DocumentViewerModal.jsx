@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { FileText, Download, ShieldCheck, Image as ImageIcon, Eye } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 export const DocumentViewerModal = ({ isOpen, onClose, doc: propDoc, document: propDocument }) => {
   const doc = propDoc || propDocument;
@@ -24,7 +25,17 @@ export const DocumentViewerModal = ({ isOpen, onClose, doc: propDoc, document: p
       // 3. Base64 Data URL
       setImageSrc(doc.data_url);
     } else if (doc.file_path && (doc.file_path.startsWith('http') || doc.file_path.startsWith('data:'))) {
+      // 4. Full HTTP or Data URL
       setImageSrc(doc.file_path);
+    } else if (doc.file_path) {
+      // 5. Supabase Storage relative path
+      const cleanPath = doc.file_path.replace(/^guest-documents\//, '');
+      const { data } = supabase.storage.from('guest-documents').getPublicUrl(cleanPath);
+      if (data?.publicUrl) {
+        setImageSrc(data.publicUrl);
+      } else {
+        setImageSrc(null);
+      }
     } else {
       setImageSrc(null);
     }

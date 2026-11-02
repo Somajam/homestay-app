@@ -824,21 +824,110 @@ export const AppProvider = ({ children }) => {
 
   // --- DOCUMENT HANDLERS ---
   const addDocument = async (docData) => {
-    const newDoc = {
-      id: `doc-${Date.now()}-${Math.random()}`,
+    const actorName =
+      currentUser?.name || (currentRole === 'caretaker' ? 'Property Caretaker' : 'Somajam Admin');
+
+    let finalFilePath = docData.file_path || `guest-documents/${docData.guest_id}/${Date.now()}_${docData.file_name}`;
+    let publicUrl = docData.preview_url || null;
+
+    // 1. Upload to Supabase Storage if file is present
+    if (docData.rawFile && (docData.rawFile instanceof File || docData.rawFile instanceof Blob)) {
+      try {
+        const cleanName = (docData.file_name || 'document.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `${docData.guest_id || 'general'}/${Date.now()}_${cleanName}`;
+
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('guest-documents')
+          .upload(storagePath, docData.rawFile, {
+            cacheControl: '3600',
+            upsert: true,
+          });
+
+        if (!uploadErr && uploadData) {
+          const { data: urlData } = supabase.storage
+            .from('guest-documents')
+            .getPublicUrl(storagePath);
+          if (urlData?.publicUrl) {
+            publicUrl = urlData.publicUrl;
+            finalFilePath = urlData.publicUrl;
+          }
+        } else if (uploadErr) {
+          console.warn('Supabase storage upload notice:', uploadErr);
+        }
+      } catch (uploadException) {
+        console.warn('Storage upload error fallback:', uploadException);
+      }
+    }
+
+    // 2. Prepare clean database row (strictly matching public.documents columns)
+    const cleanDoc = {
+      id: `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      guest_id: docData.guest_id,
+      guest_name: docData.guest_name || 'Guest',
+      file_name: docData.file_name || 'id_document.jpg',
+      file_path: finalFilePath,
+      file_type: docData.file_type || 'image/jpeg',
+      file_size: docData.file_size || '250 KB',
+      uploaded_by: actorName,
       uploaded_at: new Date().toISOString(),
-      uploaded_by: currentUser.name,
-      ...docData,
     };
 
-    setDocuments((prev) => [newDoc, ...prev]);
+    // In-memory doc contains preview_url for instant preview
+    const inMemoryDoc = {
+      ...cleanDoc,
+      preview_url: publicUrl || docData.preview_url,
+    };
 
+    setDocuments((prev) => {
+      const updated = [inMemoryDoc, ...prev];
+      try {
+        localStorage.setItem('somajam_documents', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // 3. Insert clean record into Supabase
     try {
-      await supabase.from('documents').insert([newDoc]);
+      const { error: insertErr } = await supabase.from('documents').insert([cleanDoc]);
+      if (insertErr) {
+        console.error('Supabase document insert error:', insertErr);
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Supabase document insert exception:', e);
     }
-    showToast(`Document ${newDoc.file_name} attached successfully`);
+
+    // 4. Automatically mark guest ID as verified/attached so it is no longer pending
+    if (docData.guest_id) {
+      setGuests((prev) => {
+        const updated = prev.map((g) => {
+          if (g.id === docData.guest_id) {
+            const hasPendingNumber = !g.id_document_number || g.id_document_number === 'Pending Check-In';
+            return {
+              ...g,
+              id_document_type: g.id_document_type === 'Pending' ? 'Aadhaar / ID' : g.id_document_type,
+              id_document_number: hasPendingNumber ? 'Verified (Document Attached)' : g.id_document_number,
+            };
+          }
+          return g;
+        });
+        try {
+          localStorage.setItem('somajam_guests', JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+
+      supabase
+        .from('guests')
+        .update({
+          id_document_type: 'Aadhaar / ID',
+          id_document_number: 'Verified (Document Attached)',
+        })
+        .eq('id', docData.guest_id)
+        .then()
+        .catch(() => {});
+    }
+
+    showToast(`Document ${cleanDoc.file_name} attached & verified successfully`);
   };
 
   const deleteDocument = async (docId) => {

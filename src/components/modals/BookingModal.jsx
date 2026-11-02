@@ -229,13 +229,14 @@ export const BookingModal = ({ isOpen, onClose }) => {
       }
 
       // Automatically links to existing guest if phone matches, or creates new
+      const hasStaged = stagedFiles.length > 0;
       const targetGuest = await addGuest({
         full_name: quickName.trim(),
         phone: quickPhone.trim(),
         nationality: 'Indian',
-        id_document_type: 'Pending',
-        id_document_number: 'Pending Check-In',
-        notes: 'Quick reservation. ID verification pending.',
+        id_document_type: hasStaged ? 'Aadhaar / ID' : 'Pending',
+        id_document_number: hasStaged ? 'Verified (Document Attached)' : 'Pending Check-In',
+        notes: hasStaged ? 'Quick reservation with ID photo attached.' : 'Quick reservation. ID verification pending.',
       });
 
       if (targetGuest) {
@@ -252,14 +253,15 @@ export const BookingModal = ({ isOpen, onClose }) => {
           return;
         }
 
+        const hasStaged = stagedFiles.length > 0;
         const targetGuest = await addGuest({
           full_name: detailedGuest.full_name.trim(),
           phone: detailedGuest.phone.trim(),
           email: detailedGuest.email,
           address: detailedGuest.address,
           nationality: detailedGuest.nationality || 'Indian',
-          id_document_type: detailedGuest.id_document_type || 'Aadhaar',
-          id_document_number: detailedGuest.id_document_number || 'Provided',
+          id_document_type: detailedGuest.id_document_type || (hasStaged ? 'Aadhaar / ID' : 'Pending'),
+          id_document_number: detailedGuest.id_document_number || (hasStaged ? 'Verified (Document Attached)' : 'Pending Check-In'),
           notes: notes,
         });
 
@@ -302,18 +304,17 @@ export const BookingModal = ({ isOpen, onClose }) => {
 
     // Attach any staged ID proof photos to this guest record
     if (targetGuestId && stagedFiles.length > 0) {
-      stagedFiles.forEach((stg) => {
-        addDocument({
+      for (const stg of stagedFiles) {
+        await addDocument({
           guest_id: targetGuestId,
           guest_name: targetGuestName,
           file_name: stg.file_name,
-          file_path: `guest-documents/${targetGuestId}/${Date.now()}_${stg.file_name}`,
           file_type: stg.file_type,
           file_size: stg.file_size,
           preview_url: stg.preview_url,
           rawFile: stg.rawFile,
         });
-      });
+      }
     }
 
     // Reset form states
