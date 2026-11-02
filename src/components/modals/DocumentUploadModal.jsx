@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import { useApp } from '../../context/AppContext';
-import { Upload, FileText, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { Upload, FileText, CheckCircle2, AlertCircle, Sparkles, Loader2 } from 'lucide-react';
 import { compressImage } from '../../utils/imageCompressor';
 
 export const DocumentUploadModal = ({ isOpen, onClose, defaultGuestId = '' }) => {
@@ -11,6 +11,7 @@ export const DocumentUploadModal = ({ isOpen, onClose, defaultGuestId = '' }) =>
   const [simulatedFile, setSimulatedFile] = useState(null);
   const [compressInfo, setCompressInfo] = useState(null);
   const [isCompressing, setIsCompressing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -48,7 +49,7 @@ export const DocumentUploadModal = ({ isOpen, onClose, defaultGuestId = '' }) =>
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedGuestId) {
       showToast('Please select a guest', 'warning');
@@ -59,25 +60,32 @@ export const DocumentUploadModal = ({ isOpen, onClose, defaultGuestId = '' }) =>
       ? simulatedFile.name
       : `${guest?.full_name?.toLowerCase().replace(/\s+/g, '_')}_${docType.toLowerCase()}.jpg`;
 
-    addDocument({
-      guest_id: selectedGuestId,
-      guest_name: guest ? guest.full_name : 'Guest',
-      id_document_type: docType,
-      file_name: fileName,
-      file_path: `guest-documents/${selectedGuestId}/${Date.now()}_${fileName}`,
-      file_type: simulatedFile ? simulatedFile.type : 'image/jpeg',
-      file_size: simulatedFile
-        ? simulatedFile.size > 1024 * 1024
-          ? `${(simulatedFile.size / (1024 * 1024)).toFixed(1)} MB`
-          : `${(simulatedFile.size / 1024).toFixed(0)} KB`
-        : '220 KB',
-      preview_url: compressInfo?.previewUrl || simulatedFile?.preview_url || null,
-      rawFile: simulatedFile || null,
-    });
+    setIsUploading(true);
+    try {
+      await addDocument({
+        guest_id: selectedGuestId,
+        guest_name: guest ? guest.full_name : 'Guest',
+        id_document_type: docType,
+        file_name: fileName,
+        file_type: simulatedFile ? simulatedFile.type : 'image/jpeg',
+        file_size: simulatedFile
+          ? simulatedFile.size > 1024 * 1024
+            ? `${(simulatedFile.size / (1024 * 1024)).toFixed(1)} MB`
+            : `${(simulatedFile.size / 1024).toFixed(0)} KB`
+          : '220 KB',
+        preview_url: compressInfo?.previewUrl || simulatedFile?.preview_url || null,
+        rawFile: simulatedFile || null,
+      });
 
-    setSimulatedFile(null);
-    setCompressInfo(null);
-    onClose();
+      setSimulatedFile(null);
+      setCompressInfo(null);
+      onClose();
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to upload document. Please retry.', 'error');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -182,10 +190,20 @@ export const DocumentUploadModal = ({ isOpen, onClose, defaultGuestId = '' }) =>
           </button>
           <button
             type="submit"
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-bold shadow-lg shadow-emerald-900/30 transition-all"
+            disabled={isUploading}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-emerald-900/30 transition-all cursor-pointer"
           >
-            <FileText className="w-4 h-4" />
-            Upload Document & Attach
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Uploading Document...</span>
+              </>
+            ) : (
+              <>
+                <FileText className="w-4 h-4" />
+                <span>Upload Document & Attach</span>
+              </>
+            )}
           </button>
         </div>
       </form>

@@ -1,13 +1,26 @@
 import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import { useApp } from '../../context/AppContext';
-import { LogIn, ShieldCheck, AlertCircle, FileText, CreditCard, Upload, Paperclip, Camera } from 'lucide-react';
+import {
+  LogIn,
+  ShieldCheck,
+  AlertCircle,
+  FileText,
+  CreditCard,
+  Upload,
+  Paperclip,
+  Camera,
+  Trash2,
+  Loader2,
+  Image as ImageIcon,
+} from 'lucide-react';
 
 export const CheckInModal = ({ isOpen, onClose, booking }) => {
   const { guests, processCheckIn, updateGuest, documents, addDocument, showToast } = useApp();
 
   const [staffNotes, setStaffNotes] = useState('');
   const [verifiedId, setVerifiedId] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Guest & ID Completion fields
   const guestObj = booking ? guests.find((g) => g.id === booking.guest_id) : null;
@@ -27,14 +40,16 @@ export const CheckInModal = ({ isOpen, onClose, booking }) => {
 
     const validFiles = [];
     files.forEach((file) => {
-      if (file.size > 5 * 1024 * 1024) {
-        showToast(`File "${file.name}" exceeds 5 MB limit!`, 'error');
+      if (file.size > 15 * 1024 * 1024) {
+        showToast(`File "${file.name}" exceeds 15 MB limit!`, 'error');
       } else {
         const previewUrl = URL.createObjectURL(file);
         validFiles.push({
-          id: `staged-checkin-${Date.now()}-${Math.random()}`,
+          id: `staged-checkin-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           file_name: file.name,
-          file_size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+          file_size: file.size > 1024 * 1024
+            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+            : `${(file.size / 1024).toFixed(0)} KB`,
           file_type: file.type || 'image/jpeg',
           preview_url: previewUrl,
           rawFile: file,
@@ -44,39 +59,55 @@ export const CheckInModal = ({ isOpen, onClose, booking }) => {
 
     if (validFiles.length > 0) {
       setStagedFiles((prev) => [...prev, ...validFiles]);
-      showToast(`Attached ${validFiles.length} photo/file(s) for check-in`, 'info');
+      showToast(`Attached ${validFiles.length} photo/file(s) — click Confirm Check-In below to upload`, 'info');
     }
+    e.target.value = '';
   };
 
-  const handleSubmit = (e) => {
+  const removeStagedFile = (fileId) => {
+    setStagedFiles((prev) => prev.filter((f) => f.id !== fileId));
+    showToast('Attached file removed', 'info');
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    // If staff provided ID details, update the guest record
-    if (booking.guest_id && idNumber.trim()) {
-      updateGuest(booking.guest_id, {
-        id_document_type: idType,
-        id_document_number: idNumber.trim(),
-      });
-    }
-
-    // Save staged files
-    if (booking.guest_id && stagedFiles.length > 0) {
-      stagedFiles.forEach((stg) => {
-        addDocument({
-          guest_id: booking.guest_id,
-          guest_name: booking.guest_name,
-          file_name: stg.file_name,
-          file_path: `guest-documents/${booking.guest_id}/${Date.now()}_${stg.file_name}`,
-          file_type: stg.file_type,
-          file_size: stg.file_size,
-          preview_url: stg.preview_url,
-          rawFile: stg.rawFile,
+    try {
+      // 1. If staff provided ID details, update the guest record
+      if (booking.guest_id && idNumber.trim()) {
+        await updateGuest(booking.guest_id, {
+          id_document_type: idType,
+          id_document_number: idNumber.trim(),
         });
-      });
-    }
+      }
 
-    processCheckIn(booking.id, staffNotes);
-    onClose();
+      // 2. Upload and save all staged files to Supabase storage & DB
+      if (booking.guest_id && stagedFiles.length > 0) {
+        for (const stg of stagedFiles) {
+          await addDocument({
+            guest_id: booking.guest_id,
+            guest_name: booking.guest_name,
+            id_document_type: idType,
+            file_name: stg.file_name,
+            file_type: stg.file_type,
+            file_size: stg.file_size,
+            preview_url: stg.preview_url,
+            rawFile: stg.rawFile,
+          });
+        }
+      }
+
+      // 3. Complete Check-In
+      await processCheckIn(booking.id, staffNotes);
+      setStagedFiles([]);
+      onClose();
+    } catch (err) {
+      console.error('Check-in error:', err);
+      showToast('Error during check-in. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -187,15 +218,53 @@ export const CheckInModal = ({ isOpen, onClose, booking }) => {
             </div>
           </div>
 
+          {/* Attached Files Visual Cards */}
           {stagedFiles.length > 0 && (
-            <div className="text-[11px] text-emerald-400 font-mono">
-              ✓ Ready to upload {stagedFiles.length} file(s) on check-in
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between text-xs font-semibold text-emerald-400">
+                <span>{stagedFiles.length} file(s) attached — Ready to upload:</span>
+                <span className="text-[11px] text-slate-400 font-normal">Will upload on confirming check-in</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {stagedFiles.map((f) => (
+                  <div
+                    key={f.id}
+                    className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2 shadow-sm"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {f.preview_url ? (
+                        <img
+                          src={f.preview_url}
+                          alt={f.file_name}
+                          className="w-10 h-10 rounded-lg object-cover border border-slate-700 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5 text-slate-400" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-200 truncate">{f.file_name}</p>
+                        <p className="text-[10px] text-slate-400">{f.file_size}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeStagedFile(f.id)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-colors shrink-0"
+                      title="Remove this photo"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
 
         {/* Verification Checkbox */}
-        <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
+        <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 transition-colors">
           <input
             type="checkbox"
             checked={verifiedId}
@@ -222,20 +291,31 @@ export const CheckInModal = ({ isOpen, onClose, booking }) => {
         </div>
 
         {/* Submit Actions */}
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-between pt-3 border-t border-slate-800">
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-bold shadow-lg shadow-emerald-900/30 transition-all"
+            disabled={isSubmitting}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-emerald-900/30 transition-all cursor-pointer"
           >
-            <LogIn className="w-4 h-4" />
-            Confirm Check-In & Mark Occupied
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Uploading ID & Checking In...</span>
+              </>
+            ) : (
+              <>
+                <LogIn className="w-4 h-4" />
+                <span>Confirm Check-In & Complete Upload</span>
+              </>
+            )}
           </button>
         </div>
       </form>
