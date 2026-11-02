@@ -82,13 +82,34 @@ CREATE TABLE IF NOT EXISTS public.admin_users (
   username TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL,
   full_name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'admin',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Seed Default Admin User
-INSERT INTO public.admin_users (id, username, password, full_name)
-VALUES ('adm-001', 'admin', 'somajam2026', 'Somajam Admin')
-ON CONFLICT (username) DO NOTHING;
+-- Ensure role column exists if table was already created
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin';
+
+-- Seed Default Admin User & Caretaker User
+INSERT INTO public.admin_users (id, username, password, full_name, role)
+VALUES 
+  ('adm-001', 'admin', 'somajam2026', 'Somajam Admin', 'admin'),
+  ('adm-002', 'caretaker', 'caretaker2026', 'Homestay Caretaker', 'caretaker')
+ON CONFLICT (username) DO UPDATE SET 
+  password = EXCLUDED.password,
+  role = EXCLUDED.role;
+
+-- 6.1 Create Booking Audit Logs Table (Activity & Change History)
+CREATE TABLE IF NOT EXISTS public.booking_audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  booking_id TEXT NOT NULL,
+  booking_ref TEXT NOT NULL,
+  action TEXT NOT NULL, -- 'CREATED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED'
+  performed_by TEXT NOT NULL DEFAULT 'Staff',
+  guest_name TEXT,
+  room_number TEXT,
+  details JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- 6. Enable Row Level Security & Allow Anonymous Read/Write Access for Staff App
 ALTER TABLE public.rooms ENABLE ROW LEVEL SECURITY;
@@ -97,12 +118,15 @@ ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.staff_list ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.booking_audit_logs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow anon read write rooms" ON public.rooms FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow anon read write guests" ON public.guests FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow anon read write bookings" ON public.bookings FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow anon read write documents" ON public.documents FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow anon read write staff_list" ON public.staff_list FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow anon read write admin_users" ON public.admin_users FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow anon read write booking_audit_logs" ON public.booking_audit_logs FOR ALL USING (true) WITH CHECK (true);
 
 -- 7. Create Expense Payers Table
 CREATE TABLE IF NOT EXISTS public.expense_payers (

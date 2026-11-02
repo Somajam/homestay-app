@@ -36,8 +36,7 @@ export const AppProvider = ({ children }) => {
     }
   });
 
-  // Always Unified Admin Role
-  const [currentRole] = useState('admin');
+  // Dynamic Role & User State
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem('somajam_user');
@@ -53,19 +52,84 @@ export const AppProvider = ({ children }) => {
     return { id: 'stf-admin', name: 'Somajam Admin', username: 'admin', role: 'admin' };
   });
 
+  const [currentRole, setCurrentRole] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('somajam_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed?.role) return parsed.role;
+      }
+    } catch (e) {}
+    return 'admin';
+  });
+
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('somajam_audit_logs');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
+
+  // Log Booking Action to Local Cache & Supabase
+  const logBookingAction = async (bookingId, bookingRef, action, details = {}) => {
+    const actorName =
+      currentUser?.name || (currentRole === 'caretaker' ? 'Property Caretaker' : 'Somajam Admin');
+
+    const logEntry = {
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      booking_id: bookingId,
+      booking_ref: bookingRef,
+      action: action,
+      performed_by: actorName,
+      guest_name: details.guest_name || '',
+      room_number: details.room_number || '',
+      details: details,
+      created_at: new Date().toISOString(),
+    };
+
+    setAuditLogs((prev) => {
+      const updated = [logEntry, ...prev].slice(0, 300);
+      try {
+        localStorage.setItem('somajam_audit_logs', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      await supabase.from('booking_audit_logs').insert([logEntry]);
+    } catch (err) {
+      console.warn('booking_audit_logs sync fallback:', err);
+    }
+  };
+
   // Login Handler
   const login = async (username, password) => {
     const lowerUser = username.toLowerCase().trim();
 
-    // Check default credentials (admin / somajam2026 or admin / admin123 or admin / password123)
-    const isDefaultMatch =
+    // Check default credentials
+    let isValid = false;
+    let displayName = 'Somajam Admin';
+    let role = 'admin';
+
+    if (
       (lowerUser === 'admin' || lowerUser === 'somajam') &&
-      (password === 'somajam2026' || password === 'admin123' || password === 'password123' || password === 'admin');
+      (password === 'somajam2026' || password === 'admin123' || password === 'password123' || password === 'admin')
+    ) {
+      isValid = true;
+      displayName = lowerUser === 'somajam' ? 'Somajam Manager' : 'Somajam Admin';
+      role = 'admin';
+    } else if (
+      lowerUser === 'caretaker' &&
+      (password === 'caretaker2026' || password === 'somajam2026')
+    ) {
+      isValid = true;
+      displayName = 'Property Caretaker';
+      role = 'caretaker';
+    }
 
-    let isValid = isDefaultMatch;
-    let displayName = lowerUser === 'somajam' ? 'Somajam Manager' : 'Somajam Admin';
-
-    // Check optional Supabase admin_users table
+    // Check optional Supabase admin_users table (supports dynamic users and roles)
     if (!isValid) {
       try {
         const { data, error } = await supabase
@@ -77,7 +141,8 @@ export const AppProvider = ({ children }) => {
 
         if (!error && data) {
           isValid = true;
-          displayName = data.full_name || data.username || 'Somajam Admin';
+          displayName = data.full_name || data.username || 'Somajam Staff';
+          role = data.role || (lowerUser.includes('caretaker') ? 'caretaker' : 'admin');
         }
       } catch (err) {
         // Fallback catch
@@ -85,12 +150,13 @@ export const AppProvider = ({ children }) => {
     }
 
     if (isValid) {
-      const userObj = { id: 'stf-admin', name: displayName, username: lowerUser, role: 'admin' };
+      const userObj = { id: `usr-${lowerUser}`, name: displayName, username: lowerUser, role: role };
       setIsAuthenticated(true);
       setCurrentUser(userObj);
+      setCurrentRole(role);
       localStorage.setItem('somajam_auth', 'true');
       localStorage.setItem('somajam_user', JSON.stringify(userObj));
-      showToast(`Welcome back, ${displayName}!`, 'success');
+      showToast(`Welcome back, ${displayName}! (${role.toUpperCase()} MODE)`, 'success');
       return { success: true };
     } else {
       return { success: false, message: 'Invalid Username or Password' };
@@ -100,6 +166,8 @@ export const AppProvider = ({ children }) => {
   // Logout Handler
   const logout = () => {
     setIsAuthenticated(false);
+    setCurrentRole('admin');
+    setCurrentUser({ id: 'stf-admin', name: 'Somajam Admin', username: 'admin', role: 'admin' });
     localStorage.removeItem('somajam_auth');
     localStorage.removeItem('somajam_user');
     showToast('Logged out successfully', 'info');
@@ -262,6 +330,17 @@ export const AppProvider = ({ children }) => {
             setExpenses(expensesData);
             try { localStorage.setItem('somajam_expenses', JSON.stringify(expensesData)); } catch(e){}
           }
+        }
+
+        // Fetch Booking Audit Logs
+        const { data: auditData, error: auditErr } = await supabase
+          .from('booking_audit_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (!auditErr && auditData && auditData.length > 0) {
+          setAuditLogs(auditData);
+          try { localStorage.setItem('somajam_audit_logs', JSON.stringify(auditData)); } catch(e){}
         }
       } catch (err) {
         console.warn('Supabase fetch notice: using in-memory state fallback until schema is executed.');
@@ -585,10 +664,21 @@ export const AppProvider = ({ children }) => {
       try { localStorage.setItem('somajam_rooms', JSON.stringify(updatedRooms)); } catch(e){}
     }
 
-    // Background sync with Supabase
+    // Background sync with Supabase and log activity
     createdBookings.forEach((bkg) => {
       supabase.from('bookings').insert([bkg]).then().catch((err) => {
         console.warn('Background Supabase booking sync failed (using local store):', err);
+      });
+
+      // Log booking creation audit trail
+      logBookingAction(bkg.id, bkg.booking_ref, 'CREATED', {
+        guest_name: bkg.guest_name,
+        room_number: bkg.room_number,
+        check_in_date: bkg.check_in_date,
+        check_out_date: bkg.check_out_date,
+        num_guests: bkg.num_guests,
+        total_amount: bkg.total_amount,
+        status: bkg.status,
       });
     });
 
@@ -642,6 +732,13 @@ export const AppProvider = ({ children }) => {
       return updated;
     });
 
+    // Record check-in audit event
+    logBookingAction(bookingId, booking.booking_ref, 'CHECKED_IN', {
+      guest_name: booking.guest_name,
+      room_number: booking.room_number,
+      staff_notes: staffNotes,
+    });
+
     try {
       supabase.from('bookings').update({ status: 'Checked In', notes: updatedNotes }).eq('id', bookingId).then();
       supabase.from('rooms').update({ status: 'Occupied' }).eq('id', booking.room_id).then();
@@ -676,6 +773,13 @@ export const AppProvider = ({ children }) => {
       return updated;
     });
 
+    // Record check-out audit event
+    logBookingAction(bookingId, booking.booking_ref, 'CHECKED_OUT', {
+      guest_name: booking.guest_name,
+      room_number: booking.room_number,
+      staff_notes: staffNotes,
+    });
+
     try {
       supabase.from('bookings').update({ status: 'Checked Out', notes: updatedNotes }).eq('id', bookingId).then();
       supabase.from('rooms').update({ status: 'Available' }).eq('id', booking.room_id).then();
@@ -702,6 +806,13 @@ export const AppProvider = ({ children }) => {
       });
       supabase.from('rooms').update({ status: 'Available' }).eq('id', target.room_id).then().catch(() => {});
     }
+
+    // Record cancellation audit event
+    logBookingAction(bookingId, target ? target.booking_ref : bookingId, 'CANCELLED', {
+      guest_name: target ? target.guest_name : '',
+      room_number: target ? target.room_number : '',
+      cancelled_by: currentUser?.name || 'Staff',
+    });
 
     try {
       supabase.from('bookings').update({ status: 'Cancelled' }).eq('id', bookingId).then();
@@ -993,6 +1104,8 @@ export const AppProvider = ({ children }) => {
         setActiveExpenseUser,
         toast,
         showToast,
+        auditLogs,
+        logBookingAction,
       }}
     >
       {children}

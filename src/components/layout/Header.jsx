@@ -59,20 +59,32 @@ export const Header = ({ setMobileOpen }) => {
       <div className="flex items-center gap-3 sm:gap-4">
         {/* User Profile Badge */}
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-600 to-teal-500 flex items-center justify-center text-white font-bold text-xs ring-2 ring-emerald-500/30">
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ring-2 ${
+              currentRole === 'caretaker'
+                ? 'bg-gradient-to-br from-amber-600 to-orange-500 ring-amber-500/30'
+                : 'bg-gradient-to-br from-emerald-600 to-teal-500 ring-emerald-500/30'
+            }`}
+          >
             {currentUser.name
               ? currentUser.name
                   .split(' ')
                   .map((n) => n[0])
                   .join('')
+              : currentRole === 'caretaker'
+              ? 'PC'
               : 'SA'}
           </div>
           <div className="hidden md:block text-left">
             <p className="text-xs font-semibold text-slate-200 leading-tight">
-              {currentUser.name || 'Somajam Admin'}
+              {currentUser.name || (currentRole === 'caretaker' ? 'Property Caretaker' : 'Somajam Admin')}
             </p>
-            <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider">
-              Admin Access
+            <p
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                currentRole === 'caretaker' ? 'text-amber-400' : 'text-emerald-400'
+              }`}
+            >
+              {currentRole === 'caretaker' ? 'Caretaker Access' : 'Admin Access'}
             </p>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { CheckInModal } from '../components/modals/CheckInModal';
 import { CheckOutModal } from '../components/modals/CheckOutModal';
 import { BookingModal } from '../components/modals/BookingModal';
+import { BookingAuditModal } from '../components/modals/BookingAuditModal';
 import { MonthlyCalendarView } from '../components/calendar/MonthlyCalendarView';
 import {
   CalendarCheck,
@@ -16,11 +17,12 @@ import {
   Filter,
   CheckCircle,
   List,
+  History,
 } from 'lucide-react';
 import { calculateStayRate } from '../utils/pricing';
 
 export const Bookings = () => {
-  const { bookings, rooms, cancelBooking } = useApp();
+  const { bookings, rooms, cancelBooking, auditLogs = [] } = useApp();
 
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'calendar'
   const [activeTab, setActiveTab] = useState('All'); // 'All' | 'Upcoming' | 'Checked In' | 'Checked Out' | 'Cancelled'
@@ -31,6 +33,7 @@ export const Bookings = () => {
   const [activeCheckIn, setActiveCheckIn] = useState(null);
   const [activeCheckOut, setActiveCheckOut] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showAuditModal, setShowAuditModal] = useState(false);
 
   // Local calendar date (YYYY-MM-DD)
   const getLocalDateStr = () => {
@@ -105,6 +108,21 @@ export const Bookings = () => {
               <span>Monthly Calendar</span>
             </button>
           </div>
+
+          {/* Booking Audit History Button */}
+          <button
+            onClick={() => setShowAuditModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-xs font-bold transition-all shadow-sm group"
+            title="View Booking Activity & Audit Logs"
+          >
+            <History className="w-4 h-4 text-indigo-400 group-hover:rotate-[-45deg] transition-transform" />
+            <span>Activity Log</span>
+            {auditLogs.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono text-[10px]">
+                {auditLogs.length}
+              </span>
+            )}
+          </button>
 
           <button
             onClick={() => setShowBookingModal(true)}
@@ -311,6 +329,12 @@ export const Bookings = () => {
       <BookingModal
         isOpen={showBookingModal}
         onClose={() => setShowBookingModal(false)}
+      />
+
+      {/* Booking Audit Modal */}
+      <BookingAuditModal
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
       />
     </div>
   );

@@ -100,11 +100,21 @@ export const Sidebar = ({ mobileOpen, setMobileOpen }) => {
         {/* Current Active Role Badge */}
         <div className="px-6 py-3 bg-slate-950/50 border-b border-slate-800/80 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <ShieldCheck
+              className={`w-4 h-4 ${
+                currentRole === 'caretaker' ? 'text-amber-400' : 'text-emerald-400'
+              }`}
+            />
             <span className="text-slate-300 font-semibold">Access Level:</span>
           </div>
-          <span className="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-            Admin
+          <span
+            className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+              currentRole === 'caretaker'
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+            }`}
+          >
+            {currentRole}
           </span>
         </div>
 
