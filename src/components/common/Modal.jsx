@@ -28,6 +28,8 @@ export const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl'
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50">
           <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
           <button
+            type="button"
+            aria-label="Close modal"
             onClick={onClose}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
           >

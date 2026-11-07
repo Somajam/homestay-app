@@ -74,20 +74,32 @@ export const BookingModal = ({ isOpen, onClose }) => {
   const [previewDoc, setPreviewDoc] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Auto-initialize default room when modal opens
+  // Auto-initialize clean form state and default room when modal opens
   useEffect(() => {
     if (isOpen) {
       setErrorMsg('');
-      if (rooms.length > 0 && selectedRoomIds.length === 0) {
-        // Default to first available room if any, otherwise first room
+      setQuickName('');
+      setQuickPhone('');
+      setDetailedGuest({
+        full_name: '',
+        phone: '',
+        email: '',
+        address: '',
+        nationality: 'Indian',
+        id_document_type: 'Aadhaar',
+        id_document_number: '',
+      });
+      setStagedFiles([]);
+      setNotes('');
+      if (rooms.length > 0) {
         const firstAvail = rooms.find((r) => r.status === 'Available') || rooms[0];
         setSelectedRoomIds([firstAvail.id]);
       }
-      if (!selectedGuestId && guests.length > 0) {
+      if (guests.length > 0) {
         setSelectedGuestId(guests[0].id);
       }
     }
-  }, [isOpen, rooms, guests]);
+  }, [isOpen]);
 
   // Compute room availability for the currently selected dates
   const roomAvailability = useMemo(() => {
@@ -150,17 +162,15 @@ export const BookingModal = ({ isOpen, onClose }) => {
 
   // Toggle room selection for multi-room booking
   const toggleRoomSelection = (roomId) => {
-    setSelectedRoomIds((prev) => {
-      if (prev.includes(roomId)) {
-        if (prev.length === 1) {
-          showToast('At least one room must remain selected', 'warning');
-          return prev;
-        }
-        return prev.filter((id) => id !== roomId);
-      } else {
-        return [...prev, roomId];
+    if (selectedRoomIds.includes(roomId)) {
+      if (selectedRoomIds.length === 1) {
+        showToast('At least one room must remain selected', 'warning');
+        return;
       }
-    });
+      setSelectedRoomIds((prev) => prev.filter((id) => id !== roomId));
+    } else {
+      setSelectedRoomIds((prev) => [...prev, roomId]);
+    }
   };
 
   // Existing documents for selected guest

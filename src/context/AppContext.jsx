@@ -129,15 +129,21 @@ export const AppProvider = ({ children }) => {
       role = 'caretaker';
     }
 
-    // Check optional Supabase admin_users table (supports dynamic users and roles)
+    // Check optional Supabase admin_users table (supports dynamic users and roles with fast timeout fallback)
     if (!isValid) {
       try {
-        const { data, error } = await supabase
+        const queryPromise = supabase
           .from('admin_users')
           .select('*')
           .eq('username', lowerUser)
           .eq('password', password)
           .single();
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase login timeout')), 1500)
+        );
+
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
         if (!error && data) {
           isValid = true;

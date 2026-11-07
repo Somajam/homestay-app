@@ -10,7 +10,9 @@
  * @returns {boolean} True if Friday night (5) or Saturday night (6)
  */
 export const isWeekendNight = (date) => {
-  const d = typeof date === 'string' ? new Date(date + 'T12:00:00') : new Date(date);
+  const d = typeof date === 'string'
+    ? (date.includes('T') ? new Date(date) : new Date(date + 'T12:00:00'))
+    : new Date(date);
   const day = d.getDay();
   // 0 = Sun (weekday night)
   // 1 = Mon (weekday night)

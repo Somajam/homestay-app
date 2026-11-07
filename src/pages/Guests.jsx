@@ -159,8 +159,16 @@ export const Guests = () => {
 
                   return (
                     <tr key={g.id || Math.random()} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="p-4">
-                        <div className="font-bold text-slate-100">{g.full_name || 'Unnamed Guest'}</div>
+                      <td
+                        className="p-4 cursor-pointer"
+                        onClick={() => {
+                          setViewingGuest(g);
+                          setDetailTab('info');
+                        }}
+                      >
+                        <div className="font-bold text-slate-100 hover:text-emerald-400 transition-colors">
+                          {g.full_name || 'Unnamed Guest'}
+                        </div>
                         <div className="text-[10px] text-slate-500 mt-0.5">{g.address || 'Address not listed'}</div>
                       </td>
                       <td className="p-4">
