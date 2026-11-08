@@ -60,8 +60,23 @@ export const Dashboard = () => {
     (b) => b && b.check_out_date === todayStr && b.status === 'Checked In'
   );
 
-  const occupiedRooms = safeRooms.filter((r) => r && r.status === 'Occupied');
-  const availableRooms = safeRooms.filter((r) => r && r.status === 'Available');
+  // Occupied Rooms: Strictly cottages that currently have an active 'Checked In' guest
+  const occupiedRooms = safeRooms.filter((r) => {
+    if (!r) return false;
+    return safeBookings.some(
+      (b) => b && b.status === 'Checked In' && (b.room_id === r.id || b.room_number === r.room_number)
+    );
+  });
+
+  // Available Rooms: Cottages ready for check-in (not maintenance, not currently occupied)
+  const availableRooms = safeRooms.filter((r) => {
+    if (!r) return false;
+    if (r.status === 'Maintenance') return false;
+    const isOccupied = safeBookings.some(
+      (b) => b && b.status === 'Checked In' && (b.room_id === r.id || b.room_number === r.room_number)
+    );
+    return !isOccupied;
+  });
 
   // Upcoming Bookings: Strictly future or today's confirmed bookings (exclude any past dates that were not checked in)
   const upcomingBookings = safeBookings

@@ -5,6 +5,7 @@ import { GuestModal } from '../components/modals/GuestModal';
 import { DocumentUploadModal } from '../components/modals/DocumentUploadModal';
 import { DocumentViewerModal } from '../components/modals/DocumentViewerModal';
 import { Modal } from '../components/common/Modal';
+import { getBookingTimestamps } from '../utils/dateUtils';
 import {
   Users,
   Search,
@@ -24,7 +25,7 @@ import {
 } from 'lucide-react';
 
 export const Guests = () => {
-  const { guests = [], bookings = [], documents = [], deleteGuest, currentRole } = useApp();
+  const { guests = [], bookings = [], documents = [], auditLogs = [], deleteGuest, currentRole } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [docFilter, setDocFilter] = useState('all');
@@ -343,23 +344,42 @@ export const Guests = () => {
               ) : (
                 safeBookings
                   .filter((b) => b && b.guest_id === viewingGuest.id)
-                  .map((b) => (
-                    <div
-                      key={b.id}
-                      className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="font-mono text-emerald-400 font-bold">{b.booking_ref}</div>
-                        <div className="text-slate-300 font-semibold">{b.room_number}</div>
-                        <div className="text-slate-400 text-[11px]">
-                          {b.check_in_date} to {b.check_out_date}
+                  .map((b) => {
+                    const { checkInTime, checkOutTime, rawCheckInTime, rawCheckOutTime } = getBookingTimestamps(b, auditLogs);
+                    return (
+                      <div
+                        key={b.id}
+                        className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between"
+                      >
+                        <div>
+                          <div className="font-mono text-emerald-400 font-bold">{b.booking_ref}</div>
+                          <div className="text-slate-300 font-semibold">{b.room_number}</div>
+                          <div className="text-slate-400 text-[11px]">
+                            {b.check_in_date} to {b.check_out_date}
+                          </div>
+                          {(rawCheckInTime || rawCheckOutTime || b.status === 'Checked In' || b.status === 'Checked Out') && (
+                            <div className="mt-1 space-y-0.5 text-[10px] font-mono">
+                              {(rawCheckInTime || b.status === 'Checked In' || b.status === 'Checked Out') && (
+                                <div className="text-emerald-400/90 flex items-center gap-1">
+                                  <span className="text-slate-500 font-sans text-[9px] uppercase">In:</span>
+                                  <span>{checkInTime}</span>
+                                </div>
+                              )}
+                              {(rawCheckOutTime || b.status === 'Checked Out') && (
+                                <div className="text-amber-400/90 flex items-center gap-1">
+                                  <span className="text-slate-500 font-sans text-[9px] uppercase">Out:</span>
+                                  <span>{checkOutTime}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
+                        <span className="px-2 py-1 rounded text-xs bg-slate-800 text-slate-200">
+                          {b.status}
+                        </span>
                       </div>
-                      <span className="px-2 py-1 rounded text-xs bg-slate-800 text-slate-200">
-                        {b.status}
-                      </span>
-                    </div>
-                  ))
+                    );
+                  })
               )}
             </div>
           )}

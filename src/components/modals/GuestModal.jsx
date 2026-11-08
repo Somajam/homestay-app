@@ -26,6 +26,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { calculateStayRate } from '../../utils/pricing';
+import { sanitizePhoneNumber, isValidPhoneNumber } from '../../utils/phoneValidation';
 
 export const GuestModal = ({ isOpen, onClose, guestToEdit = null }) => {
   const { rooms, documents, addGuest, updateGuest, addBooking, addDocument, deleteDocument, showToast } = useApp();
@@ -128,6 +129,10 @@ export const GuestModal = ({ isOpen, onClose, guestToEdit = null }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!isValidPhoneNumber(formData.phone)) {
+      showToast('Mobile number must contain at least 10 digits and cannot contain letters!', 'warning');
+      return;
+    }
     let guestObj = guestToEdit;
 
     if (guestToEdit) {
@@ -211,7 +216,7 @@ export const GuestModal = ({ isOpen, onClose, guestToEdit = null }) => {
                 required
                 placeholder="e.g. +91 98470 00000"
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, phone: sanitizePhoneNumber(e.target.value) })}
                 className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500"
               />
             </div>

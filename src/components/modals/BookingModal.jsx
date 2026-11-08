@@ -28,6 +28,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { calculateMultiRoomStayRate } from '../../utils/pricing';
+import { sanitizePhoneNumber, isValidPhoneNumber } from '../../utils/phoneValidation';
 
 export const BookingModal = ({ isOpen, onClose }) => {
   const { guests, rooms, bookings, documents, addGuest, addBooking, addDocument, showToast } = useApp();
@@ -238,6 +239,13 @@ export const BookingModal = ({ isOpen, onClose }) => {
         return;
       }
 
+      if (!isValidPhoneNumber(quickPhone)) {
+        const msg = 'Mobile number must contain at least 10 digits and cannot contain letters!';
+        setErrorMsg(msg);
+        showToast(msg, 'warning');
+        return;
+      }
+
       // Automatically links to existing guest if phone matches, or creates new
       const hasStaged = stagedFiles.length > 0;
       const targetGuest = await addGuest({
@@ -258,6 +266,13 @@ export const BookingModal = ({ isOpen, onClose }) => {
       if (guestSource === 'new') {
         if (!detailedGuest.full_name.trim() || !detailedGuest.phone.trim()) {
           const msg = 'Please enter Guest Full Name and Phone Number!';
+          setErrorMsg(msg);
+          showToast(msg, 'warning');
+          return;
+        }
+
+        if (!isValidPhoneNumber(detailedGuest.phone)) {
+          const msg = 'Mobile number must contain at least 10 digits and cannot contain letters!';
           setErrorMsg(msg);
           showToast(msg, 'warning');
           return;
@@ -420,7 +435,7 @@ export const BookingModal = ({ isOpen, onClose }) => {
                     required
                     placeholder="e.g. +91 98470 12345"
                     value={quickPhone}
-                    onChange={(e) => setQuickPhone(e.target.value)}
+                    onChange={(e) => setQuickPhone(sanitizePhoneNumber(e.target.value))}
                     className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
                   />
                 </div>
@@ -498,7 +513,7 @@ export const BookingModal = ({ isOpen, onClose }) => {
                           required
                           placeholder="+91 / International"
                           value={detailedGuest.phone}
-                          onChange={(e) => setDetailedGuest({ ...detailedGuest, phone: e.target.value })}
+                          onChange={(e) => setDetailedGuest({ ...detailedGuest, phone: sanitizePhoneNumber(e.target.value) })}
                           className="w-full px-3 py-1.5 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
                         />
                       </div>

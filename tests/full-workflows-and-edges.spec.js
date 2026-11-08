@@ -350,8 +350,9 @@ test.describe('Somajam Homestay - Comprehensive End-to-End Master Lifecycle & Ed
     await page.click('button:has-text("Complete Check-Out & Release Room")');
     await expect(page.locator('h3:has-text("Guest Check-Out Process")')).not.toBeVisible();
 
-    // Verify status updated to Stay Completed
-    await expect(page.locator('tr:has-text("Priya Nair") span:has-text("Stay Completed")')).toBeVisible({ timeout: 5000 });
+    // Verify checked-out booking appears under Checked Out tab
+    await page.click('button:has-text("Checked Out")');
+    await expect(page.locator('tr:has-text("Priya Nair") span:has-text("Stay Completed")').first()).toBeVisible({ timeout: 5000 });
 
     // Verify Cottage No. 5 is back to Available on Rooms page
     await page.locator('a[href="/rooms"]').first().click();
@@ -369,7 +370,8 @@ test.describe('Somajam Homestay - Comprehensive End-to-End Master Lifecycle & Ed
     page.once('dialog', (dialog) => dialog.accept());
     await retreatRow.locator('button[title="Cancel Reservation"]').click();
 
-    // Verify status becomes Cancelled
+    // Verify status becomes Cancelled under Cancelled tab
+    await page.click('button:has-text("Cancelled")');
     await expect(page.locator('tr:has-text("Apex Tech Retreat") span:has-text("Cancelled")').first()).toBeVisible({ timeout: 5000 });
 
     // -------------------------------------------------------------------------

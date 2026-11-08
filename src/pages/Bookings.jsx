@@ -20,12 +20,13 @@ import {
   History,
 } from 'lucide-react';
 import { calculateStayRate } from '../utils/pricing';
+import { getBookingTimestamps } from '../utils/dateUtils';
 
 export const Bookings = () => {
   const { bookings, rooms, cancelBooking, auditLogs = [] } = useApp();
 
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'calendar'
-  const [activeTab, setActiveTab] = useState('All'); // 'All' | 'Upcoming' | 'Checked In' | 'Checked Out' | 'Cancelled'
+  const [activeTab, setActiveTab] = useState('Active & Upcoming'); // 'Active & Upcoming' | 'Checked In' | 'Upcoming' | 'Checked Out' | 'Cancelled' | 'All'
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRoomFilter, setSelectedRoomFilter] = useState('all');
 
@@ -56,14 +57,18 @@ export const Bookings = () => {
       selectedRoomFilter === 'all' || b.room_id === selectedRoomFilter;
 
     let matchesTab = true;
-    if (activeTab === 'Upcoming') {
-      matchesTab = b.status === 'Confirmed' && b.check_in_date >= todayStr;
+    if (activeTab === 'Active & Upcoming') {
+      matchesTab = b.status === 'Checked In' || b.status === 'Confirmed';
     } else if (activeTab === 'Checked In') {
       matchesTab = b.status === 'Checked In';
+    } else if (activeTab === 'Upcoming') {
+      matchesTab = b.status === 'Confirmed';
     } else if (activeTab === 'Checked Out') {
       matchesTab = b.status === 'Checked Out';
     } else if (activeTab === 'Cancelled') {
       matchesTab = b.status === 'Cancelled';
+    } else if (activeTab === 'All') {
+      matchesTab = true;
     }
 
     return matchesSearch && matchesRoom && matchesTab;
@@ -140,9 +145,11 @@ export const Bookings = () => {
         <>
           {/* Filter Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-800">
-        {['All', 'Upcoming', 'Checked In', 'Checked Out', 'Cancelled'].map((tab) => {
+        {['Active & Upcoming', 'Checked In', 'Upcoming', 'Checked Out', 'Cancelled', 'All'].map((tab) => {
           const count =
-            tab === 'All'
+            tab === 'Active & Upcoming'
+              ? bookings.filter((b) => b.status === 'Checked In' || b.status === 'Confirmed').length
+              : tab === 'All'
               ? bookings.length
               : bookings.filter((b) => {
                   if (tab === 'Upcoming') return b.status === 'Confirmed';
@@ -243,6 +250,26 @@ export const Bookings = () => {
                         <span className="text-slate-500">→</span>
                         <span>{b.check_out_date}</span>
                       </div>
+                      {(() => {
+                        const { checkInTime, checkOutTime, rawCheckInTime, rawCheckOutTime } = getBookingTimestamps(b, auditLogs);
+                        if (!rawCheckInTime && !rawCheckOutTime && b.status !== 'Checked In' && b.status !== 'Checked Out') return null;
+                        return (
+                          <div className="mt-1 space-y-0.5 text-[11px] font-mono text-slate-400">
+                            {(rawCheckInTime || b.status === 'Checked In' || b.status === 'Checked Out') && (
+                              <div className="flex items-center gap-1 text-emerald-400/90">
+                                <span className="text-[10px] uppercase text-slate-500 font-sans">In:</span>
+                                <span>{checkInTime}</span>
+                              </div>
+                            )}
+                            {(rawCheckOutTime || b.status === 'Checked Out') && (
+                              <div className="flex items-center gap-1 text-amber-400/90">
+                                <span className="text-[10px] uppercase text-slate-500 font-sans">Out:</span>
+                                <span>{checkOutTime}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {(() => {
                         const totalAmt = b.total_amount || (() => {
                           const room = rooms.find((r) => r.id === b.room_id || r.room_number === b.room_number);

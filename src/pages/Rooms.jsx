@@ -101,8 +101,9 @@ export const Rooms = () => {
         {filteredRooms.map((room) => {
           // Check active occupant if occupied
           const activeBooking = bookings.find(
-            (b) => b.room_id === room.id && b.status === 'Checked In'
+            (b) => (b.room_id === room.id || b.room_number === room.room_number) && b.status === 'Checked In'
           );
+          const effectiveStatus = room.status === 'Maintenance' ? 'Maintenance' : (activeBooking ? 'Occupied' : 'Available');
 
           const weekdayRate = room.weekday_rate ?? room.price_per_night ?? 3500;
           const weekendRate = room.weekend_rate ?? (room.weekday_rate ? Math.round(room.weekday_rate * 1.25) : 4500);
@@ -119,7 +120,7 @@ export const Rooms = () => {
                     {room.room_type}
                   </span>
                   <div className="flex items-center gap-2">
-                    <StatusBadge status={room.status} />
+                    <StatusBadge status={effectiveStatus} />
                     {currentRole === 'admin' && (
                       <button
                         onClick={() => handleOpenEditModal(room)}

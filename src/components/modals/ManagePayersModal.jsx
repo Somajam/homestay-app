@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import { useApp } from '../../context/AppContext';
 import { UserPlus, Users, Trash2, CheckCircle2, Phone, CreditCard, Tag } from 'lucide-react';
+import { sanitizePhoneNumber, isValidPhoneNumber } from '../../utils/phoneValidation';
 
 export const ManagePayersModal = ({ isOpen, onClose }) => {
-  const { expensePayers = [], expenses = [], addExpensePayer, deleteExpensePayer, currentRole } = useApp();
+  const { expensePayers = [], expenses = [], addExpensePayer, deleteExpensePayer, currentRole, showToast } = useApp();
 
   const [name, setName] = useState('');
   const [groupTag, setGroupTag] = useState('Director');
@@ -16,6 +17,11 @@ export const ManagePayersModal = ({ isOpen, onClose }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    if (phone.trim() && !isValidPhoneNumber(phone)) {
+      showToast('Mobile number must contain at least 10 digits and cannot contain letters!', 'warning');
+      return;
+    }
 
     addExpensePayer({
       name: name.trim(),
@@ -81,7 +87,7 @@ export const ManagePayersModal = ({ isOpen, onClose }) => {
                 type="tel"
                 placeholder="e.g. +91 98470 00000"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(sanitizePhoneNumber(e.target.value))}
                 className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-emerald-500"
               />
             </div>

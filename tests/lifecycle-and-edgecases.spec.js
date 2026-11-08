@@ -177,4 +177,79 @@ test.describe('Somajam Homestay - Deep Workflow & Edge Cases Test Suite', () => 
     await expect(modalHeading).not.toBeVisible();
   });
 
+  test('E6. Bug Fixes Verification: Phone sanitization/min-10-digits, Dashboard occupancy, Bookings default active filter, Timestamps, Upload validation', async ({ page }) => {
+    test.setTimeout(60000);
+    // 1. Dashboard Upload ID Doc validation without file
+    await page.locator('a[href="/"]').first().click();
+    await expect(page.locator('button:has-text("Upload ID Doc")').first()).toBeVisible();
+    await page.locator('button:has-text("Upload ID Doc")').first().click();
+    await expect(page.locator('h3:has-text("Upload Guest ID Document")')).toBeVisible();
+
+    // Click upload without selecting file
+    await page.locator('.fixed.inset-0.z-50 button:has-text("Upload Document")').click();
+    // Warning toast must appear
+    await expect(page.locator('text=No files selected to upload')).toBeVisible({ timeout: 5000 });
+    // Close modal
+    await page.locator('.fixed.inset-0.z-50 button:has-text("Cancel")').first().click();
+
+    // 2. Mobile number field validation in Booking Modal
+    await page.locator('button:has-text("Add Booking")').first().click();
+    await expect(page.locator('h3:has-text("New Cottage Reservation & Check-In")')).toBeVisible();
+
+    const phoneInput = page.locator('.fixed.inset-0.z-50 input[placeholder="e.g. +91 98470 12345"]');
+    // Type alphabets into phone input -> should be stripped
+    await phoneInput.fill('abc98470xyz12345def');
+    const sanitizedVal = await phoneInput.inputValue();
+    expect(sanitizedVal).toBe('9847012345'); // All alphabets stripped
+
+    // Test minimum 10 digits rejection
+    await phoneInput.fill('98470');
+    await page.fill('input[placeholder="e.g. Rajesh Kumar"]', 'Validation Test Guest');
+    await page.locator('.fixed.inset-0.z-50 button[type="submit"]').click();
+    await expect(page.locator('text=Mobile number must contain at least 10 digits').first()).toBeVisible({ timeout: 5000 });
+
+    // Fill valid phone with 10 digits and select room to submit booking
+    await phoneInput.fill('+91 98470 54321');
+    const roomBtn = page.locator('.fixed.inset-0.z-50 button:has-text("Room No. 1")').first();
+    if (await roomBtn.isVisible()) {
+      await roomBtn.click();
+    }
+    await page.locator('.fixed.inset-0.z-50 button[type="submit"]').click();
+    await expect(page.locator('h3:has-text("New Cottage Reservation & Check-In")')).not.toBeVisible();
+
+    // 3. Bookings default filter: 'Active & Upcoming' tab active, includes active/upcoming and excludes checked out
+    await page.locator('a[href="/bookings"]').first().click();
+    await expect(page.locator('button:has-text("Active & Upcoming")')).toHaveClass(/text-emerald-400/);
+    await expect(page.locator('tr:has-text("Validation Test Guest")')).toBeVisible();
+
+    // 4. Timestamps visibility in Bookings (Check-in and check-out)
+    const checkInBtn = page.locator('tr:has-text("Validation Test Guest") button:has-text("Check In")').first();
+    await checkInBtn.click();
+    await page.click('button:has-text("Confirm Check-In")');
+    await expect(page.locator('h3:has-text("Guest Check-In & Verification")')).not.toBeVisible();
+
+    // Verify "In:" timestamp appears under dates
+    await expect(page.locator('tr:has-text("Validation Test Guest") span:has-text("In:")')).toBeVisible();
+
+    // Check out the guest
+    await page.locator('tr:has-text("Validation Test Guest") button:has-text("Check Out")').first().click();
+    await page.click('button:has-text("Complete Check-Out & Release Room")');
+    await expect(page.locator('h3:has-text("Guest Check-Out Process")')).not.toBeVisible();
+
+    // Under default 'Active & Upcoming' tab, checked out booking is excluded
+    await expect(page.locator('tr:has-text("Validation Test Guest")')).not.toBeVisible();
+
+    // When clicking 'Checked Out' filter tab, checked-out booking is shown
+    await page.click('button:has-text("Checked Out")');
+    await expect(page.locator('tr:has-text("Validation Test Guest") span:has-text("Stay Completed")')).toBeVisible();
+    await expect(page.locator('tr:has-text("Validation Test Guest") span:has-text("Out:")')).toBeVisible();
+
+    // 5. Reports Section check-in/out timestamps and completed stays log
+    await page.locator('a[href="/reports-settings"]').first().click();
+    await page.click('button:has-text("Stays & Cancellation Logs")');
+    await expect(page.locator('th:has-text("Duration")')).toBeVisible();
+    await expect(page.locator('tr:has-text("Validation Test Guest") span:has-text("In:")')).toBeVisible();
+    await expect(page.locator('tr:has-text("Validation Test Guest") span:has-text("Out:")')).toBeVisible();
+  });
+
 });

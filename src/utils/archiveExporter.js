@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { formatTimestamp } from './dateUtils';
 
 /**
  * Clean string for safe CSV cell escaping
@@ -83,7 +84,9 @@ export const exportMonthlyVisitorArchive = async ({
     'Booking Reference',
     'Cottage / Room',
     'Check-In Date',
+    'Check-In Timestamp',
     'Check-Out Date',
+    'Check-Out Timestamp',
     'Nights',
     'Guests Count',
     'Booking Status',
@@ -118,7 +121,9 @@ export const exportMonthlyVisitorArchive = async ({
           b.booking_ref,
           b.room_number,
           formatDate(b.check_in_date),
+          b.checked_in_at ? formatTimestamp(b.checked_in_at) : (b.status === 'Checked In' || b.status === 'Checked Out' ? 'Recorded' : 'N/A'),
           formatDate(b.check_out_date),
+          b.checked_out_at ? formatTimestamp(b.checked_out_at) : (b.status === 'Checked Out' ? 'Recorded' : 'N/A'),
           nights,
           b.num_guests || 2,
           b.status,
@@ -137,6 +142,8 @@ export const exportMonthlyVisitorArchive = async ({
         g.nationality || 'Indian',
         g.id_document_type || 'Aadhaar',
         g.id_document_number || '',
+        'N/A',
+        'N/A',
         'N/A',
         'N/A',
         'N/A',

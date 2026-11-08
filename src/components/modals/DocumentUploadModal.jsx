@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { useApp } from '../../context/AppContext';
 import { Upload, FileText, CheckCircle2, AlertCircle, Sparkles, Loader2 } from 'lucide-react';
@@ -12,6 +12,18 @@ export const DocumentUploadModal = ({ isOpen, onClose, defaultGuestId = '' }) =>
   const [compressInfo, setCompressInfo] = useState(null);
   const [isCompressing, setIsCompressing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSimulatedFile(null);
+      setCompressInfo(null);
+      if (defaultGuestId) {
+        setSelectedGuestId(defaultGuestId);
+      } else if (guests.length > 0 && !selectedGuestId) {
+        setSelectedGuestId(guests[0].id);
+      }
+    }
+  }, [isOpen, defaultGuestId, guests]);
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -51,14 +63,16 @@ export const DocumentUploadModal = ({ isOpen, onClose, defaultGuestId = '' }) =>
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!simulatedFile) {
+      showToast('No files selected to upload', 'warning');
+      return;
+    }
     if (!selectedGuestId) {
       showToast('Please select a guest', 'warning');
       return;
     }
     const guest = guests.find((g) => g.id === selectedGuestId);
-    const fileName = simulatedFile
-      ? simulatedFile.name
-      : `${guest?.full_name?.toLowerCase().replace(/\s+/g, '_')}_${docType.toLowerCase()}.jpg`;
+    const fileName = simulatedFile.name;
 
     setIsUploading(true);
     try {
@@ -90,7 +104,7 @@ export const DocumentUploadModal = ({ isOpen, onClose, defaultGuestId = '' }) =>
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Upload Guest ID Document">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {/* Select Guest */}
         <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -100,13 +114,16 @@ export const DocumentUploadModal = ({ isOpen, onClose, defaultGuestId = '' }) =>
             value={selectedGuestId}
             onChange={(e) => setSelectedGuestId(e.target.value)}
             className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500"
-            required
           >
-            {guests.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.full_name} ({g.id_document_type}: {g.id_document_number})
-              </option>
-            ))}
+            {guests.length === 0 ? (
+              <option value="">No guests registered in directory</option>
+            ) : (
+              guests.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.full_name} ({g.id_document_type}: {g.id_document_number})
+                </option>
+              ))
+            )}
           </select>
         </div>
 

@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext';
 import { Modal } from '../components/common/Modal';
 import { DocumentViewerModal } from '../components/modals/DocumentViewerModal';
 import { exportMonthlyVisitorArchive, downloadBlob } from '../utils/archiveExporter';
+import { getBookingTimestamps } from '../utils/dateUtils';
+import { sanitizePhoneNumber, isValidPhoneNumber } from '../utils/phoneValidation';
 import {
   BarChart3,
   Download,
@@ -39,6 +41,7 @@ export const ReportsSettings = () => {
     guests = [],
     documents = [],
     staffList = [],
+    auditLogs = [],
     addStaff,
     currentRole,
     currentUser,
@@ -142,7 +145,9 @@ export const ReportsSettings = () => {
     const headers = [
       'Sl No',
       'Check-In Date',
+      'Check-In Timestamp',
       'Check-Out Date',
+      'Check-Out Timestamp',
       'Nights',
       'Booking Ref',
       'Cottage / Room',
@@ -160,6 +165,7 @@ export const ReportsSettings = () => {
 
     const rows = filteredRegisterRecords.map((b, idx) => {
       const guest = guests.find((g) => g.id === b.guest_id);
+      const timestamps = getBookingTimestamps(b, auditLogs);
       const inDate = new Date(b.check_in_date);
       const outDate = new Date(b.check_out_date);
       const nights = !isNaN(inDate) && !isNaN(outDate)
@@ -169,7 +175,9 @@ export const ReportsSettings = () => {
       return [
         idx + 1,
         b.check_in_date,
+        `"${timestamps.checkInTime}"`,
         b.check_out_date,
+        `"${timestamps.checkOutTime}"`,
         nights,
         `"${b.booking_ref}"`,
         `"Cottage ${b.room_number}"`,
@@ -316,13 +324,22 @@ export const ReportsSettings = () => {
   // --- STATS TAB (Occupancy & History) ---
   const completedStays = bookings.filter((b) => b.status === 'Checked Out');
   const cancelledStays = bookings.filter((b) => b.status === 'Cancelled');
-  const occupiedRooms = rooms.filter((r) => r.status === 'Occupied');
+  const occupiedRooms = rooms.filter((r) => {
+    if (!r) return false;
+    return bookings.some(
+      (b) => b && b.status === 'Checked In' && (b.room_id === r.id || b.room_number === r.room_number)
+    );
+  });
   const occupancyRate = ((occupiedRooms.length / (rooms.length || 1)) * 100).toFixed(1);
 
   const handleAddStaffSubmit = (e) => {
     e.preventDefault();
     if (!newStaffName || !newStaffEmail) {
       showToast('Please enter staff name and email', 'warning');
+      return;
+    }
+    if (newStaffPhone && !isValidPhoneNumber(newStaffPhone)) {
+      showToast('Mobile number must contain at least 10 digits and cannot contain letters!', 'warning');
       return;
     }
     addStaff({
@@ -598,6 +615,27 @@ export const ReportsSettings = () => {
                             <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-950 text-slate-400 border border-slate-800">
                               {nights} {nights === 1 ? 'Night' : 'Nights'} • {b.num_guests || 2} Guests
                             </span>
+                            {/* Check-In / Out Timestamps */}
+                            {(() => {
+                              const { checkInTime, checkOutTime, rawCheckInTime, rawCheckOutTime } = getBookingTimestamps(b, auditLogs);
+                              if (!rawCheckInTime && !rawCheckOutTime && b.status !== 'Checked In' && b.status !== 'Checked Out') return null;
+                              return (
+                                <div className="mt-1 space-y-0.5 text-[10px] font-mono">
+                                  {(rawCheckInTime || b.status === 'Checked In' || b.status === 'Checked Out') && (
+                                    <div className="text-emerald-400/90 flex items-center gap-1">
+                                      <span className="text-slate-500 uppercase font-sans text-[9px]">Check-In:</span>
+                                      <span>{checkInTime}</span>
+                                    </div>
+                                  )}
+                                  {(rawCheckOutTime || b.status === 'Checked Out') && (
+                                    <div className="text-amber-400/90 flex items-center gap-1">
+                                      <span className="text-slate-500 uppercase font-sans text-[9px]">Check-Out:</span>
+                                      <span>{checkOutTime}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </td>
 
                           {/* Guest Name & Contact */}
@@ -890,7 +928,10 @@ export const ReportsSettings = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {rooms.map((r) => {
-                const isOccupied = r.status === 'Occupied';
+                const isOccupied = bookings.some(
+                  (b) => b && b.status === 'Checked In' && (b.room_id === r.id || b.room_number === r.room_number)
+                );
+                const effectiveStatus = r.status === 'Maintenance' ? 'Maintenance' : (isOccupied ? 'Occupied' : 'Available');
                 return (
                   <div key={r.id} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
                     <span className="text-xs font-bold text-slate-300">Room {r.room_number}</span>
@@ -902,7 +943,7 @@ export const ReportsSettings = () => {
                           : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                       }`}
                     >
-                      {r.status}
+                      {effectiveStatus}
                     </span>
                   </div>
                 );
@@ -937,15 +978,30 @@ export const ReportsSettings = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {completedStays.map((b) => (
-                    <tr key={b.id} className="hover:bg-slate-800/40">
-                      <td className="p-4 font-mono font-bold text-emerald-400">{b.booking_ref}</td>
-                      <td className="p-4 font-bold text-slate-100">{b.guest_name}</td>
-                      <td className="p-4">{b.room_number}</td>
-                      <td className="p-4">{b.check_in_date} → {b.check_out_date}</td>
-                      <td className="p-4 text-slate-400 italic">{b.notes || 'Normal checkout'}</td>
-                    </tr>
-                  ))}
+                  {completedStays.map((b) => {
+                    const { checkInTime, checkOutTime } = getBookingTimestamps(b, auditLogs);
+                    return (
+                      <tr key={b.id} className="hover:bg-slate-800/40">
+                        <td className="p-4 font-mono font-bold text-emerald-400">{b.booking_ref}</td>
+                        <td className="p-4 font-bold text-slate-100">{b.guest_name}</td>
+                        <td className="p-4">{b.room_number}</td>
+                        <td className="p-4">
+                          <div className="font-semibold text-slate-200">{b.check_in_date} → {b.check_out_date}</div>
+                          <div className="mt-1 space-y-0.5 text-[11px] font-mono text-slate-400">
+                            <div className="flex items-center gap-1 text-emerald-400/90">
+                              <span className="text-[10px] uppercase text-slate-500 font-sans">In:</span>
+                              <span>{checkInTime}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-amber-400/90">
+                              <span className="text-[10px] uppercase text-slate-500 font-sans">Out:</span>
+                              <span>{checkOutTime}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 text-slate-400 italic">{b.notes || 'Normal checkout'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1120,7 +1176,7 @@ export const ReportsSettings = () => {
                 type="tel"
                 placeholder="+91 98460 00000"
                 value={newStaffPhone}
-                onChange={(e) => setNewStaffPhone(e.target.value)}
+                onChange={(e) => setNewStaffPhone(sanitizePhoneNumber(e.target.value))}
                 className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500"
               />
             </div>
