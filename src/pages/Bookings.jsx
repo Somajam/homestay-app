@@ -34,6 +34,7 @@ export const Bookings = () => {
   const [activeCheckIn, setActiveCheckIn] = useState(null);
   const [activeCheckOut, setActiveCheckOut] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [selectedBookingDate, setSelectedBookingDate] = useState(null);
   const [showAuditModal, setShowAuditModal] = useState(false);
 
   // Local calendar date (YYYY-MM-DD)
@@ -140,7 +141,12 @@ export const Bookings = () => {
       </div>
 
       {viewMode === 'calendar' ? (
-        <MonthlyCalendarView onNewBooking={() => setShowBookingModal(true)} />
+        <MonthlyCalendarView
+          onNewBooking={(dateStr) => {
+            setSelectedBookingDate(dateStr);
+            setShowBookingModal(true);
+          }}
+        />
       ) : (
         <>
           {/* Filter Tabs */}
@@ -355,7 +361,11 @@ export const Bookings = () => {
       {/* Booking Modal */}
       <BookingModal
         isOpen={showBookingModal}
-        onClose={() => setShowBookingModal(false)}
+        onClose={() => {
+          setShowBookingModal(false);
+          setSelectedBookingDate(null);
+        }}
+        initialDate={selectedBookingDate}
       />
 
       {/* Booking Audit Modal */}

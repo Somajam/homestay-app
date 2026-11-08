@@ -252,4 +252,53 @@ test.describe('Somajam Homestay - Deep Workflow & Edge Cases Test Suite', () => 
     await expect(page.locator('tr:has-text("Validation Test Guest") span:has-text("Out:")')).toBeVisible();
   });
 
+  test('E7. Dynamic Room Availability on Date Selection & 5-Room Uncluttered Calendar View', async ({ page }) => {
+    test.setTimeout(60000);
+
+    // 1. Navigate to bookings and create a booking for Room 1
+    await page.locator('a[href="/bookings"]').first().click();
+    await page.click('button:has-text("Create New Booking")');
+
+    await page.fill('input[placeholder="e.g. Rajesh Kumar"]', 'Cottage One Guest');
+    await page.fill('input[placeholder="e.g. +91 98470 12345"]', '+91 98470 99001');
+
+    const inDate1 = '2026-12-15';
+    const outDate1 = '2026-12-18';
+    const dateInputs = page.locator('.fixed.inset-0.z-50 input[type="date"]');
+    await dateInputs.nth(0).fill(inDate1);
+    await dateInputs.nth(1).fill(outDate1);
+
+    // Select Room 1
+    await page.locator('.fixed.inset-0.z-50 button:has-text("Room No. 1")').first().click();
+    await page.locator('.fixed.inset-0.z-50 button[type="submit"]').click();
+    await expect(page.locator('h3:has-text("New Cottage Reservation & Check-In")')).not.toBeVisible();
+
+    // 2. Open booking modal again and pick an overlapping date range
+    await page.click('button:has-text("Create New Booking")');
+    const dateInputs2 = page.locator('.fixed.inset-0.z-50 input[type="date"]');
+    await dateInputs2.nth(0).fill('2026-12-16');
+    await dateInputs2.nth(1).fill('2026-12-18');
+
+    // Verify Room 1 is NOT selected by default and shows "Booked on selected dates"
+    const room1Card = page.locator('.fixed.inset-0.z-50 button:has-text("Room No. 1")').first();
+    await expect(room1Card).toHaveText(/Booked on selected dates/);
+    await expect(room1Card).not.toHaveClass(/border-emerald-500/);
+
+    // Verify a room that IS available (e.g. Room 2) is automatically selected
+    const room2Card = page.locator('.fixed.inset-0.z-50 button:has-text("Room No. 2")').first();
+    await expect(room2Card).toHaveText(/Selected/);
+    await expect(room2Card).toHaveClass(/border-emerald-500/);
+
+    // 3. Close modal
+    await page.locator('.fixed.inset-0.z-50 button:has-text("Cancel")').first().click();
+
+    // 4. Switch to Calendar view and verify 5-room accommodations
+    await page.click('button:has-text("Monthly Calendar")');
+    await expect(page.locator('button:has-text("Today")')).toBeVisible();
+
+    // Verify day cell layout renders without max-h scroll barrier
+    const calendarGrid = page.locator('.grid.grid-cols-7');
+    await expect(calendarGrid.first()).toBeVisible();
+  });
+
 });

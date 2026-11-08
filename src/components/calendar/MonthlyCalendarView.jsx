@@ -164,7 +164,7 @@ export const MonthlyCalendarView = ({ onNewBooking }) => {
         <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-slate-800/60 bg-slate-950/40">
           {/* Empty cells before first day of month */}
           {Array.from({ length: firstDayIndex }).map((_, index) => (
-            <div key={`empty-${index}`} className="min-h-[110px] p-2 bg-slate-950/20 opacity-30" />
+            <div key={`empty-${index}`} className="min-h-[148px] sm:min-h-[155px] p-2 bg-slate-950/20 opacity-30" />
           ))}
 
           {/* Actual Month Days */}
@@ -177,16 +177,16 @@ export const MonthlyCalendarView = ({ onNewBooking }) => {
             return (
               <div
                 key={dayStr}
-                className={`min-h-[110px] p-2 transition-colors group relative flex flex-col justify-between ${
+                className={`min-h-[148px] sm:min-h-[155px] p-1.5 transition-colors group relative flex flex-col justify-start ${
                   isToday
                     ? 'bg-emerald-950/20 border-emerald-500/30'
                     : 'hover:bg-slate-800/30'
                 }`}
               >
                 {/* Date header & Quick Add */}
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1">
                   <span
-                    className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${
+                    className={`text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full ${
                       isToday
                         ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
                         : 'text-slate-300 group-hover:text-emerald-400'
@@ -206,24 +206,25 @@ export const MonthlyCalendarView = ({ onNewBooking }) => {
                   )}
                 </div>
 
-                {/* Day's Bookings List */}
-                <div className="space-y-1 overflow-y-auto max-h-[85px] pr-0.5 custom-scrollbar">
+                {/* Day's Bookings List - Fits all 5 cottages together without scrolling */}
+                <div className="space-y-1 flex-1 flex flex-col justify-start">
                   {dayBookings.map((b) => {
                     const isCheckInDay = b.check_in_date === dayStr;
+                    const cleanRoom = String(b.room_number || '').replace(/^(Room|Cottage|No\.)\s*/i, '');
                     return (
                       <button
                         key={`${b.id}-${dayStr}`}
                         onClick={() => setActiveBookingDetail(b)}
-                        className={`w-full text-left px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all flex items-center justify-between gap-1 truncate ${getStatusColor(
+                        className={`w-full text-left px-1.5 py-0.5 rounded-md border text-[10.5px] font-medium leading-tight transition-all flex items-center justify-between gap-1 truncate shadow-xs hover:scale-[1.01] ${getStatusColor(
                           b.status
                         )}`}
                         title={`Room ${b.room_number}: ${b.guest_name} (${b.status})`}
                       >
-                        <span className="truncate flex items-center gap-1">
-                          <span className="font-mono text-[10px] opacity-80 shrink-0 font-bold">
-                            {b.room_number}
+                        <span className="truncate flex items-center gap-1 min-w-0">
+                          <span className="font-mono text-[9px] px-1 py-0.2 rounded bg-slate-900/70 font-bold shrink-0 opacity-90">
+                            {cleanRoom ? `R${cleanRoom}` : 'R'}
                           </span>
-                          <span className="truncate">{b.guest_name}</span>
+                          <span className="truncate font-semibold">{b.guest_name}</span>
                         </span>
                         {isCheckInDay && (
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" title="Check-In Day" />
@@ -231,10 +232,6 @@ export const MonthlyCalendarView = ({ onNewBooking }) => {
                       </button>
                     );
                   })}
-
-                  {dayBookings.length === 0 && (
-                    <div className="h-6" />
-                  )}
                 </div>
               </div>
             );

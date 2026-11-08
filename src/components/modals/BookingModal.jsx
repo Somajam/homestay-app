@@ -30,7 +30,7 @@ import {
 import { calculateMultiRoomStayRate } from '../../utils/pricing';
 import { sanitizePhoneNumber, isValidPhoneNumber } from '../../utils/phoneValidation';
 
-export const BookingModal = ({ isOpen, onClose }) => {
+export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
   const { guests, rooms, bookings, documents, addGuest, addBooking, addDocument, showToast } = useApp();
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -92,20 +92,33 @@ export const BookingModal = ({ isOpen, onClose }) => {
       });
       setStagedFiles([]);
       setNotes('');
-      if (rooms.length > 0) {
-        const firstAvail = rooms.find((r) => r.status === 'Available') || rooms[0];
-        setSelectedRoomIds([firstAvail.id]);
+      if (initialDate) {
+        setCheckInDate(initialDate);
+        const nextD = new Date(initialDate);
+        nextD.setDate(nextD.getDate() + 1);
+        setCheckOutDate(nextD.toISOString().split('T')[0]);
+      } else {
+        setCheckInDate(todayStr);
+        setCheckOutDate(tomorrowStr);
       }
       if (guests.length > 0) {
         setSelectedGuestId(guests[0].id);
       }
     }
-  }, [isOpen]);
+  }, [isOpen, initialDate]);
 
   // Compute room availability for the currently selected dates
   const roomAvailability = useMemo(() => {
     const map = {};
     rooms.forEach((r) => {
+      if (r.status === 'Maintenance') {
+        map[r.id] = {
+          isAvailable: false,
+          conflictingBooking: null,
+          reason: 'Maintenance',
+        };
+        return;
+      }
       const conflictingBooking = bookings.find((b) => {
         if (b.room_id !== r.id || b.status === 'Cancelled' || b.status === 'Checked Out') {
           return false;
@@ -122,6 +135,41 @@ export const BookingModal = ({ isOpen, onClose }) => {
     });
     return map;
   }, [rooms, bookings, checkInDate, checkOutDate]);
+
+  // List of rooms that are available for the selected date range
+  const availableRoomsForDates = useMemo(() => {
+    return rooms.filter((r) => roomAvailability[r.id]?.isAvailable);
+  }, [rooms, roomAvailability]);
+
+  // Reactive room selection when dates are chosen or changed:
+  // 1. Only select a room that is actually available for that date range.
+  // 2. If the currently selected room is not available for that date range, switch to an available one.
+  // 3. If no rooms are available for the date range, deselect all and set warning message.
+  useEffect(() => {
+    if (!isOpen || !checkInDate || !checkOutDate || rooms.length === 0) return;
+
+    if (availableRoomsForDates.length === 0) {
+      setSelectedRoomIds([]);
+      setErrorMsg('No rooms available for this date range');
+    } else {
+      // Keep any currently selected room(s) that are still available for these dates
+      const validSelected = selectedRoomIds.filter((id) =>
+        availableRoomsForDates.some((r) => r.id === id)
+      );
+
+      if (validSelected.length > 0) {
+        if (validSelected.length !== selectedRoomIds.length) {
+          setSelectedRoomIds(validSelected);
+        }
+      } else {
+        // Auto-select the first available room for the selected date range
+        setSelectedRoomIds([availableRoomsForDates[0].id]);
+      }
+
+      // Clear the "no rooms available" message if previously shown
+      setErrorMsg((prev) => (prev === 'No rooms available for this date range' ? '' : prev));
+    }
+  }, [isOpen, checkInDate, checkOutDate, availableRoomsForDates]);
 
   // Selected rooms objects
   const selectedRoomsList = useMemo(() => {
@@ -214,7 +262,9 @@ export const BookingModal = ({ isOpen, onClose }) => {
     setErrorMsg('');
 
     if (selectedRoomIds.length === 0) {
-      const msg = 'Please select at least one cottage room!';
+      const msg = availableRoomsForDates.length === 0
+        ? 'No rooms available for this date range'
+        : 'Please select at least one cottage room!';
       setErrorMsg(msg);
       showToast(msg, 'warning');
       return;
@@ -718,7 +768,15 @@ export const BookingModal = ({ isOpen, onClose }) => {
                 <input
                   type="date"
                   value={checkInDate}
-                  onChange={(e) => setCheckInDate(e.target.value)}
+                  onChange={(e) => {
+                    const newIn = e.target.value;
+                    setCheckInDate(newIn);
+                    if (newIn && checkOutDate && newIn >= checkOutDate) {
+                      const nextD = new Date(newIn);
+                      nextD.setDate(nextD.getDate() + 1);
+                      setCheckOutDate(nextD.toISOString().split('T')[0]);
+                    }
+                  }}
                   className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500"
                   required
                 />
@@ -729,6 +787,7 @@ export const BookingModal = ({ isOpen, onClose }) => {
                 </label>
                 <input
                   type="date"
+                  min={checkInDate}
                   value={checkOutDate}
                   onChange={(e) => setCheckOutDate(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500"
@@ -755,6 +814,14 @@ export const BookingModal = ({ isOpen, onClose }) => {
               </span>
             </div>
 
+            {/* Warning when no rooms are available for the selected dates */}
+            {availableRoomsForDates.length === 0 && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>No rooms available for this date range. Please select different stay dates.</span>
+              </div>
+            )}
+
             {/* Cottage Selection Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
               {rooms.map((r) => {
@@ -771,8 +838,8 @@ export const BookingModal = ({ isOpen, onClose }) => {
                       isSelected
                         ? 'bg-emerald-950/40 border-emerald-500 shadow-md shadow-emerald-950'
                         : isAvail
-                        ? 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                        : 'bg-slate-900/40 border-rose-950/50 opacity-70 hover:opacity-100'
+                        ? 'bg-slate-900 border-slate-800 hover:border-slate-700 cursor-pointer'
+                        : 'bg-slate-900/40 border-rose-950/50 opacity-70 hover:opacity-100 cursor-pointer'
                     }`}
                   >
                     <div className="flex items-start justify-between">

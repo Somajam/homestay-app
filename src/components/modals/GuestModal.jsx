@@ -29,7 +29,7 @@ import { calculateStayRate } from '../../utils/pricing';
 import { sanitizePhoneNumber, isValidPhoneNumber } from '../../utils/phoneValidation';
 
 export const GuestModal = ({ isOpen, onClose, guestToEdit = null }) => {
-  const { rooms, documents, addGuest, updateGuest, addBooking, addDocument, deleteDocument, showToast } = useApp();
+  const { rooms, bookings = [], documents, addGuest, updateGuest, addBooking, addDocument, deleteDocument, showToast } = useApp();
 
   const todayStr = new Date().toISOString().split('T')[0];
   const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
@@ -437,11 +437,23 @@ export const GuestModal = ({ isOpen, onClose, guestToEdit = null }) => {
                     className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:border-emerald-500"
                   >
                     <option value="">-- Select Room (1BHK Cottage) --</option>
-                    {rooms.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        Cottage {r.room_number} ({r.status}) — Wkday: ₹{r.weekday_rate || r.price_per_night} / Wkend: ₹{r.weekend_rate || r.price_per_night}
-                      </option>
-                    ))}
+                    {rooms.map((r) => {
+                      const isConflict = bookings.some(
+                        (b) =>
+                          b &&
+                          b.room_id === r.id &&
+                          b.status !== 'Cancelled' &&
+                          b.status !== 'Checked Out' &&
+                          new Date(formData.check_in_date) < new Date(b.check_out_date) &&
+                          new Date(formData.check_out_date) > new Date(b.check_in_date)
+                      );
+                      const isAvail = !isConflict && r.status !== 'Maintenance';
+                      return (
+                        <option key={r.id} value={r.id} disabled={!isAvail}>
+                          Cottage {r.room_number} {isConflict ? '(Booked for dates)' : r.status === 'Maintenance' ? '(Under Maintenance)' : '(Available)'} — Wkday: ₹{r.weekday_rate || r.price_per_night} / Wkend: ₹{r.weekend_rate || r.price_per_night}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
