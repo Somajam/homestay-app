@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, isRoomMatch } from '../context/AppContext';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { CheckInModal } from '../components/modals/CheckInModal';
 import { CheckOutModal } from '../components/modals/CheckOutModal';
@@ -63,9 +63,10 @@ export const Dashboard = () => {
   // Occupied Rooms: Strictly cottages that currently have an active 'Checked In' guest
   const occupiedRooms = safeRooms.filter((r) => {
     if (!r) return false;
-    return safeBookings.some(
-      (b) => b && b.status === 'Checked In' && (b.room_id === r.id || b.room_number === r.room_number)
+    const hasCheckedIn = safeBookings.some(
+      (b) => b && b.status === 'Checked In' && isRoomMatch(r, b)
     );
+    return hasCheckedIn || r.status === 'Occupied';
   });
 
   // Available Rooms: Cottages ready for check-in (not maintenance, not currently occupied)
@@ -73,9 +74,9 @@ export const Dashboard = () => {
     if (!r) return false;
     if (r.status === 'Maintenance') return false;
     const isOccupied = safeBookings.some(
-      (b) => b && b.status === 'Checked In' && (b.room_id === r.id || b.room_number === r.room_number)
+      (b) => b && b.status === 'Checked In' && isRoomMatch(r, b)
     );
-    return !isOccupied;
+    return !isOccupied && r.status !== 'Occupied';
   });
 
   // Upcoming Bookings: Strictly future or today's confirmed bookings (exclude any past dates that were not checked in)

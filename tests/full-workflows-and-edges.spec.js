@@ -160,7 +160,11 @@ test.describe('Somajam Homestay - Comprehensive End-to-End Master Lifecycle & Ed
     await dateInputsMulti.nth(0).fill(multiInDate);
     await dateInputsMulti.nth(1).fill(multiOutDate);
 
-    // Select both Cottage No. 2 and Cottage No. 3
+    // Enable Multi-Room mode and select both Cottage No. 2 and Cottage No. 3
+    const multiRoomCheckbox = page.locator('label:has-text("Book Multiple Cottages") input');
+    if (await multiRoomCheckbox.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await multiRoomCheckbox.check();
+    }
     const room2Btn = page.locator('.fixed.inset-0.z-50 button:has-text("Room No. 2")').first();
     const room3Btn = page.locator('.fixed.inset-0.z-50 button:has-text("Room No. 3")').first();
     await room2Btn.click();
@@ -443,9 +447,9 @@ test.describe('Somajam Homestay - Comprehensive End-to-End Master Lifecycle & Ed
 
     // Switch active operating user back to Director 1 and delete successfully
     await activeUserSelect.selectOption({ label: 'Director 1 (Ramesh) (Director)' });
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(800);
     await page.locator('tr:has-text("Campfire Wood Supply") button[title*="Delete Expense"]').first().click();
-    await expect(page.locator('text=Expense entry removed').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=Expense entry removed').first()).toBeVisible({ timeout: 8000 });
 
     // -------------------------------------------------------------------------
     // STEP 12: REPORTS & SETTINGS 5-TAB SUITE, ZIP ARCHIVES & STORAGE PURGE

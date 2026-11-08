@@ -69,6 +69,7 @@ export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
 
   // Multi-room Selection State (array of room IDs)
   const [selectedRoomIds, setSelectedRoomIds] = useState([]);
+  const [isMultiRoomMode, setIsMultiRoomMode] = useState(false);
 
   // Staged documents attached inside Booking modal
   const [stagedFiles, setStagedFiles] = useState([]);
@@ -79,6 +80,7 @@ export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
   useEffect(() => {
     if (isOpen) {
       setErrorMsg('');
+      setIsMultiRoomMode(false);
       setQuickName('');
       setQuickPhone('');
       setDetailedGuest({
@@ -209,16 +211,20 @@ export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
     }
   }, [matchingExistingGuest, quickName]);
 
-  // Toggle room selection for multi-room booking
-  const toggleRoomSelection = (roomId) => {
-    if (selectedRoomIds.includes(roomId)) {
-      if (selectedRoomIds.length === 1) {
-        showToast('At least one room must remain selected', 'warning');
-        return;
+  // Cottage selection handler: single-select by default, multi-select when enabled
+  const handleRoomClick = (roomId) => {
+    if (isMultiRoomMode) {
+      if (selectedRoomIds.includes(roomId)) {
+        if (selectedRoomIds.length === 1) {
+          showToast('At least one room must remain selected', 'warning');
+          return;
+        }
+        setSelectedRoomIds((prev) => prev.filter((id) => id !== roomId));
+      } else {
+        setSelectedRoomIds((prev) => [...prev, roomId]);
       }
-      setSelectedRoomIds((prev) => prev.filter((id) => id !== roomId));
     } else {
-      setSelectedRoomIds((prev) => [...prev, roomId]);
+      setSelectedRoomIds([roomId]);
     }
   };
 
@@ -797,21 +803,40 @@ export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
             </div>
           </div>
 
-          {/* MULTI-ROOM / COTTAGE SELECTOR */}
+          {/* COTTAGE SELECTOR (SINGLE OR MULTI-ROOM) */}
           <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-2 gap-2">
               <div>
                 <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                   <BedDouble className="w-4 h-4 text-emerald-400" />
-                  Select Cottages (Multi-Room Booking Supported) *
+                  Select Cottages *
                 </h4>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Click to select one or multiple cottages under this guest's name
+                  {isMultiRoomMode
+                    ? 'Multi-Room Mode: Click to select multiple cottages for a group stay'
+                    : 'Click an available cottage to select it'}
                 </p>
               </div>
-              <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                {selectedRoomIds.length} Cottage{selectedRoomIds.length > 1 ? 's' : ''} Selected
-              </span>
+              <div className="flex items-center gap-2.5 shrink-0">
+                <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-300 hover:text-emerald-400 transition-colors bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={isMultiRoomMode}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      setIsMultiRoomMode(enabled);
+                      if (!enabled && selectedRoomIds.length > 1) {
+                        setSelectedRoomIds([selectedRoomIds[0]]);
+                      }
+                    }}
+                    className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 bg-slate-950 w-3.5 h-3.5"
+                  />
+                  <span>Book Multiple Cottages</span>
+                </label>
+                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                  {selectedRoomIds.length} Cottage{selectedRoomIds.length > 1 ? 's' : ''} Selected
+                </span>
+              </div>
             </div>
 
             {/* Warning when no rooms are available for the selected dates */}
@@ -833,7 +858,7 @@ export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
                   <button
                     key={r.id}
                     type="button"
-                    onClick={() => toggleRoomSelection(r.id)}
+                    onClick={() => handleRoomClick(r.id)}
                     className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
                       isSelected
                         ? 'bg-emerald-950/40 border-emerald-500 shadow-md shadow-emerald-950'

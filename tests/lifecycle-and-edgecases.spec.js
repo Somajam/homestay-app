@@ -301,4 +301,72 @@ test.describe('Somajam Homestay - Deep Workflow & Edge Cases Test Suite', () => 
     await expect(calendarGrid.first()).toBeVisible();
   });
 
+  test('E8. Dashboard real-time check-in updates: Expected check-ins, Upcoming reservations, and Occupied/Available top tiles', async ({ page }) => {
+    // 1. Navigate to Dashboard
+    await page.goto('/');
+    await expect(page.locator('h2:has-text("Parunthumpara Operations")')).toBeVisible();
+
+    // 2. Create a booking arriving TODAY
+    await page.locator('button:has-text("Add Booking")').first().click();
+    await page.fill('input[placeholder="e.g. Rajesh Kumar"]', 'CheckIn Sync Guest');
+    await page.fill('input[placeholder="e.g. +91 98470 12345"]', '+91 98470 99887');
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 86400000);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    const dateInputs = page.locator('.fixed.inset-0.z-50 input[type="date"]');
+    await dateInputs.nth(0).fill(todayStr);
+    await dateInputs.nth(1).fill(tomorrowStr);
+
+    // Pick Room No. 4 (single-select switches from auto-selected Room 1 to Room 4)
+    await page.locator('.fixed.inset-0.z-50 button:has-text("Room No. 4")').first().click();
+    await expect(page.locator('.fixed.inset-0.z-50:has-text("1 Cottage Selected")')).toBeVisible();
+
+    await page.locator('.fixed.inset-0.z-50 button[type="submit"]').click();
+    await expect(page.locator('h3:has-text("New Cottage Reservation & Check-In")')).not.toBeVisible();
+
+    // 3. Verify on Dashboard before check-in
+    // Expected check-ins queue should have "CheckIn Sync Guest"
+    const expectedSection = page.locator('div.p-5:has-text("Today\'s Expected Check-ins")');
+    await expect(expectedSection.locator('text=CheckIn Sync Guest')).toBeVisible();
+
+    // Upcoming Reservations Preview should also list "CheckIn Sync Guest"
+    const upcomingSection = page.locator('div.p-5:has-text("Upcoming Reservations Preview")');
+    await expect(upcomingSection.locator('text=CheckIn Sync Guest')).toBeVisible();
+
+    // Get initial occupied count
+    const occupiedTileBefore = await page.locator('div.p-5:has-text("Occupied Rooms") p.text-2xl').innerText();
+    const initialOccupiedCount = parseInt(occupiedTileBefore.split('/')[0].trim(), 10) || 0;
+
+    const availableTileBefore = await page.locator('div.p-5:has-text("Available Rooms") p.text-2xl').innerText();
+    const initialAvailableCount = parseInt(availableTileBefore.trim(), 10) || 0;
+
+    // 4. Click Check In button under "Today's Expected Check-ins"
+    const checkInBtn = expectedSection.locator('button:has-text("Check In")').first();
+    await checkInBtn.click();
+
+    // Confirm Check-In Modal appears
+    await expect(page.locator('h3:has-text("Guest Check-In & Verification")')).toBeVisible();
+    await page.locator('button:has-text("Confirm Check-In")').click();
+    await expect(page.locator('h3:has-text("Guest Check-In & Verification")')).not.toBeVisible();
+
+    // 5. Inspect Dashboard after check-in:
+    // a. Check-in card under "Today's Expected Check-ins" must be REMOVED immediately
+    await expect(expectedSection.locator('text=CheckIn Sync Guest')).not.toBeVisible();
+
+    // b. Upcoming Reservations Preview must REMOVE the checked-in guest immediately (no longer Confirmed/Upcoming)
+    await expect(upcomingSection.locator('text=CheckIn Sync Guest')).not.toBeVisible();
+
+    // c. Occupied Rooms must increment by 1
+    const occupiedTileAfter = await page.locator('div.p-5:has-text("Occupied Rooms") p.text-2xl').innerText();
+    const newOccupiedCount = parseInt(occupiedTileAfter.split('/')[0].trim(), 10);
+    expect(newOccupiedCount).toBe(initialOccupiedCount + 1);
+
+    // d. Available Rooms must decrement by 1
+    const availableTileAfter = await page.locator('div.p-5:has-text("Available Rooms") p.text-2xl').innerText();
+    const newAvailableCount = parseInt(availableTileAfter.trim(), 10);
+    expect(newAvailableCount).toBe(initialAvailableCount - 1);
+  });
+
 });

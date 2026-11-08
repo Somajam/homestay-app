@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, isRoomMatch } from '../context/AppContext';
 import { Modal } from '../components/common/Modal';
 import { DocumentViewerModal } from '../components/modals/DocumentViewerModal';
 import { exportMonthlyVisitorArchive, downloadBlob } from '../utils/archiveExporter';
@@ -327,7 +327,7 @@ export const ReportsSettings = () => {
   const occupiedRooms = rooms.filter((r) => {
     if (!r) return false;
     return bookings.some(
-      (b) => b && b.status === 'Checked In' && (b.room_id === r.id || b.room_number === r.room_number)
+      (b) => b && b.status === 'Checked In' && isRoomMatch(r, b)
     );
   });
   const occupancyRate = ((occupiedRooms.length / (rooms.length || 1)) * 100).toFixed(1);
@@ -929,9 +929,9 @@ export const ReportsSettings = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {rooms.map((r) => {
                 const isOccupied = bookings.some(
-                  (b) => b && b.status === 'Checked In' && (b.room_id === r.id || b.room_number === r.room_number)
+                  (b) => b && b.status === 'Checked In' && isRoomMatch(r, b)
                 );
-                const effectiveStatus = r.status === 'Maintenance' ? 'Maintenance' : (isOccupied ? 'Occupied' : 'Available');
+                const effectiveStatus = r.status === 'Maintenance' ? 'Maintenance' : (isOccupied || r.status === 'Occupied' ? 'Occupied' : 'Available');
                 return (
                   <div key={r.id} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
                     <span className="text-xs font-bold text-slate-300">Room {r.room_number}</span>

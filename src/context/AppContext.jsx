@@ -25,6 +25,42 @@ export const normalizeRoom = (r) => {
 };
 
 /**
+ * Universal room matching helper to reliably match rooms and bookings
+ * regardless of whether room_id or room_number is stored as 'room-1', '1', 'No. 1', 'Room 1', etc.
+ */
+export const isRoomMatch = (room, booking) => {
+  if (!room || !booking) return false;
+  const rId = room.id != null ? String(room.id).trim().toLowerCase() : '';
+  const bRoomId = booking.room_id != null ? String(booking.room_id).trim().toLowerCase() : '';
+  if (rId && bRoomId) {
+    if (rId === bRoomId) return true;
+    const cleanRId = rId.replace(/^room-?/, '');
+    const cleanBRoomId = bRoomId.replace(/^room-?/, '');
+    if (cleanRId && cleanRId === cleanBRoomId) return true;
+  }
+  const rNum = room.room_number != null ? String(room.room_number).trim().toLowerCase() : '';
+  const bNum = booking.room_number != null ? String(booking.room_number).trim().toLowerCase() : '';
+  if (rNum && bNum) {
+    if (rNum === bNum) return true;
+    const cleanRNum = rNum.replace(/^(room|cottage|no\.?)\s*/i, '').trim();
+    const cleanBNum = bNum.replace(/^(room|cottage|no\.?)\s*/i, '').trim();
+    if (cleanRNum && cleanRNum === cleanBNum) return true;
+  }
+  // Cross-check booking.room_id with room.room_number or vice versa
+  if (bRoomId && rNum) {
+    const cleanBRoomId = bRoomId.replace(/^room-?/, '');
+    const cleanRNum = rNum.replace(/^(room|cottage|no\.?)\s*/i, '').trim();
+    if (cleanBRoomId && cleanBRoomId === cleanRNum) return true;
+  }
+  if (rId && bNum) {
+    const cleanRId = rId.replace(/^room-?/, '');
+    const cleanBNum = bNum.replace(/^(room|cottage|no\.?)\s*/i, '').trim();
+    if (cleanRId && cleanRId === cleanBNum) return true;
+  }
+  return false;
+};
+
+/**
  * Reconciles room statuses strictly based on active Checked In bookings.
  * Ensures a room is never falsely marked as 'Occupied' if no checked-in guest exists.
  */
@@ -39,7 +75,7 @@ export const reconcileRoomStatuses = (currentRooms, currentBookings) => {
 
     // A room is Occupied if and only if there is an active 'Checked In' booking
     const hasCheckedIn = safeB.some(
-      (b) => b && b.status === 'Checked In' && (b.room_id === norm.id || b.room_number === norm.room_number)
+      (b) => b && b.status === 'Checked In' && isRoomMatch(norm, b)
     );
 
     const targetStatus = hasCheckedIn ? 'Occupied' : 'Available';
@@ -48,6 +84,8 @@ export const reconcileRoomStatuses = (currentRooms, currentBookings) => {
       // Sync out-of-sync status in Supabase in background
       if (norm.status === 'Occupied' && !hasCheckedIn) {
         supabase.from('rooms').update({ status: 'Available' }).eq('id', norm.id).then().catch(() => {});
+      } else if (norm.status === 'Available' && hasCheckedIn) {
+        supabase.from('rooms').update({ status: 'Occupied' }).eq('id', norm.id).then().catch(() => {});
       }
       return { ...norm, status: targetStatus };
     }
@@ -764,7 +802,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const processCheckIn = async (bookingId, staffNotes = '') => {
-    const booking = bookings.find((b) => b.id === bookingId);
+    const booking = bookings.find((b) => String(b.id) === String(bookingId));
     if (!booking) return;
 
     const guestDocs = documents.filter((d) => d.guest_id === booking.guest_id);
@@ -780,20 +818,20 @@ export const AppProvider = ({ children }) => {
       : booking.notes;
     const checkInTimestamp = new Date().toISOString();
 
-    setBookings((prev) => {
-      const updated = prev.map((b) =>
-        b.id === bookingId ? { ...b, status: 'Checked In', notes: updatedNotes, checked_in_at: checkInTimestamp } : b
-      );
-      try { localStorage.setItem('somajam_bookings', JSON.stringify(updated)); } catch(e){}
-      return updated;
-    });
+    const updatedBookings = bookings.map((b) =>
+      String(b.id) === String(bookingId)
+        ? { ...b, status: 'Checked In', notes: updatedNotes, checked_in_at: checkInTimestamp }
+        : b
+    );
 
-    setRooms((prev) => {
-      const updated = prev.map((r) =>
-        r.id === booking.room_id ? { ...r, status: 'Occupied' } : r
-      );
-      try { localStorage.setItem('somajam_rooms', JSON.stringify(updated)); } catch(e){}
-      return updated;
+    setBookings(updatedBookings);
+    try { localStorage.setItem('somajam_bookings', JSON.stringify(updatedBookings)); } catch(e){}
+
+    // Reconcile and update room statuses immediately based on active checked-in bookings
+    setRooms((prevRooms) => {
+      const reconciled = reconcileRoomStatuses(prevRooms, updatedBookings);
+      try { localStorage.setItem('somajam_rooms', JSON.stringify(reconciled)); } catch(e){}
+      return reconciled;
     });
 
     // Record check-in audit event
@@ -805,8 +843,11 @@ export const AppProvider = ({ children }) => {
     });
 
     try {
-      supabase.from('bookings').update({ status: 'Checked In', notes: updatedNotes, checked_in_at: checkInTimestamp }).eq('id', bookingId).then();
-      supabase.from('rooms').update({ status: 'Occupied' }).eq('id', booking.room_id).then();
+      supabase.from('bookings').update({ status: 'Checked In', notes: updatedNotes, checked_in_at: checkInTimestamp }).eq('id', bookingId).then().catch(() => {});
+      const matchedRoom = rooms.find((r) => isRoomMatch(r, booking));
+      if (matchedRoom) {
+        supabase.from('rooms').update({ status: 'Occupied' }).eq('id', matchedRoom.id).then().catch(() => {});
+      }
     } catch (e) {
       console.error(e);
     }
@@ -815,7 +856,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const processCheckOut = async (bookingId, staffNotes = '') => {
-    const booking = bookings.find((b) => b.id === bookingId);
+    const booking = bookings.find((b) => String(b.id) === String(bookingId));
     if (!booking) return;
 
     const updatedNotes = staffNotes
@@ -823,20 +864,20 @@ export const AppProvider = ({ children }) => {
       : booking.notes;
     const checkOutTimestamp = new Date().toISOString();
 
-    setBookings((prev) => {
-      const updated = prev.map((b) =>
-        b.id === bookingId ? { ...b, status: 'Checked Out', notes: updatedNotes, checked_out_at: checkOutTimestamp } : b
-      );
-      try { localStorage.setItem('somajam_bookings', JSON.stringify(updated)); } catch(e){}
-      return updated;
-    });
+    const updatedBookings = bookings.map((b) =>
+      String(b.id) === String(bookingId)
+        ? { ...b, status: 'Checked Out', notes: updatedNotes, checked_out_at: checkOutTimestamp }
+        : b
+    );
 
-    setRooms((prev) => {
-      const updated = prev.map((r) =>
-        r.id === booking.room_id ? { ...r, status: 'Available' } : r
-      );
-      try { localStorage.setItem('somajam_rooms', JSON.stringify(updated)); } catch(e){}
-      return updated;
+    setBookings(updatedBookings);
+    try { localStorage.setItem('somajam_bookings', JSON.stringify(updatedBookings)); } catch(e){}
+
+    // Reconcile and update room statuses immediately
+    setRooms((prevRooms) => {
+      const reconciled = reconcileRoomStatuses(prevRooms, updatedBookings);
+      try { localStorage.setItem('somajam_rooms', JSON.stringify(reconciled)); } catch(e){}
+      return reconciled;
     });
 
     // Record check-out audit event
@@ -848,8 +889,11 @@ export const AppProvider = ({ children }) => {
     });
 
     try {
-      supabase.from('bookings').update({ status: 'Checked Out', notes: updatedNotes, checked_out_at: checkOutTimestamp }).eq('id', bookingId).then();
-      supabase.from('rooms').update({ status: 'Available' }).eq('id', booking.room_id).then();
+      supabase.from('bookings').update({ status: 'Checked Out', notes: updatedNotes, checked_out_at: checkOutTimestamp }).eq('id', bookingId).then().catch(() => {});
+      const matchedRoom = rooms.find((r) => isRoomMatch(r, booking));
+      if (matchedRoom) {
+        supabase.from('rooms').update({ status: 'Available' }).eq('id', matchedRoom.id).then().catch(() => {});
+      }
     } catch (e) {
       console.error(e);
     }
@@ -858,21 +902,19 @@ export const AppProvider = ({ children }) => {
   };
 
   const cancelBooking = async (bookingId) => {
-    const target = bookings.find((b) => b.id === bookingId);
-    setBookings((prev) => {
-      const updated = prev.map((b) => (b.id === bookingId ? { ...b, status: 'Cancelled' } : b));
-      try { localStorage.setItem('somajam_bookings', JSON.stringify(updated)); } catch(e){}
-      return updated;
-    });
+    const target = bookings.find((b) => String(b.id) === String(bookingId));
+    const updatedBookings = bookings.map((b) =>
+      String(b.id) === String(bookingId) ? { ...b, status: 'Cancelled' } : b
+    );
+    setBookings(updatedBookings);
+    try { localStorage.setItem('somajam_bookings', JSON.stringify(updatedBookings)); } catch(e){}
 
-    if (target && target.status === 'Checked In') {
-      setRooms((prev) => {
-        const updated = prev.map((r) => (r.id === target.room_id ? { ...r, status: 'Available' } : r));
-        try { localStorage.setItem('somajam_rooms', JSON.stringify(updated)); } catch(e){}
-        return updated;
-      });
-      supabase.from('rooms').update({ status: 'Available' }).eq('id', target.room_id).then().catch(() => {});
-    }
+    // Reconcile room statuses immediately
+    setRooms((prevRooms) => {
+      const reconciled = reconcileRoomStatuses(prevRooms, updatedBookings);
+      try { localStorage.setItem('somajam_rooms', JSON.stringify(reconciled)); } catch(e){}
+      return reconciled;
+    });
 
     // Record cancellation audit event
     logBookingAction(bookingId, target ? target.booking_ref : bookingId, 'CANCELLED', {
@@ -882,7 +924,13 @@ export const AppProvider = ({ children }) => {
     });
 
     try {
-      supabase.from('bookings').update({ status: 'Cancelled' }).eq('id', bookingId).then();
+      supabase.from('bookings').update({ status: 'Cancelled' }).eq('id', bookingId).then().catch(() => {});
+      if (target) {
+        const matchedRoom = rooms.find((r) => isRoomMatch(r, target));
+        if (matchedRoom) {
+          supabase.from('rooms').update({ status: 'Available' }).eq('id', matchedRoom.id).then().catch(() => {});
+        }
+      }
     } catch (e) {
       console.error(e);
     }
