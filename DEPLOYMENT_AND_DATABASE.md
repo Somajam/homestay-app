@@ -148,7 +148,10 @@ The application uses an offline-first, dual-layer persistence model in [`AppCont
 * **Default Admin In-App Credentials:**
   - Username: `admin`
   - Password: `somajam2026`
-  - In-app Auto Fill is provided on the `/login` screen.
+  - Caretaker Username: `caretaker` / Password: `caretaker2026`
+* **Pre-Delivery Transaction Data Wipe:**
+  - Run [`clean_transactions.sql`](file:///c:/1.JGM%20Personal%20Data/Neenu%20web%20application/Rejchachan%20homestay/clean_transactions.sql) in Supabase SQL Editor.
+  - Clears all bookings, guests, ID documents, audit logs, and storage bucket files while preserving master room configurations, pricing, expense payers, and staff directory.
 * **GitHub Repository:**
   - URL: `https://github.com/Neenu-Joju/homestay-app.git`
 * **Vercel Account:**

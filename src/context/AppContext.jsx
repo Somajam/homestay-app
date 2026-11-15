@@ -249,12 +249,13 @@ export const AppProvider = ({ children }) => {
   };
 
   // One-time clean slate migration: purge dummy test transaction data from localStorage
-  const DATA_CLEAN_VERSION = 'v2_reconcile_room_occupancy';
+  const DATA_CLEAN_VERSION = 'v3_production_clean_slate';
   try {
     if (localStorage.getItem('somajam_clean_version') !== DATA_CLEAN_VERSION) {
       localStorage.removeItem('somajam_bookings');
       localStorage.removeItem('somajam_guests');
       localStorage.removeItem('somajam_documents');
+      localStorage.removeItem('somajam_audit_logs');
       localStorage.removeItem('somajam_expenses');
 
       // Reset all room statuses to Available in local cache

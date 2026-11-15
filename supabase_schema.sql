@@ -173,12 +173,15 @@ FOR ALL USING (bucket_id = 'guest-documents') WITH CHECK (bucket_id = 'guest-doc
 -- Transaction data (Guests, Bookings, Expenses, Documents) starts empty for live testing
 -- ====================================================================
 
--- OPTIONAL CLEANUP SCRIPT: Run below statements to wipe existing dummy records from Supabase:
+-- PRE-DELIVERY CLEANUP SCRIPT:
+-- Run below statements to wipe all transaction data while strictly preserving master data:
 -- TRUNCATE TABLE public.bookings CASCADE;
 -- TRUNCATE TABLE public.guests CASCADE;
--- TRUNCATE TABLE public.expenses CASCADE;
 -- TRUNCATE TABLE public.documents CASCADE;
+-- TRUNCATE TABLE public.booking_audit_logs CASCADE;
+-- DELETE FROM storage.objects WHERE bucket_id = 'guest-documents';
 -- UPDATE public.rooms SET status = 'Available';
+-- (Optional test expenses wipe: TRUNCATE TABLE public.expenses CASCADE;)
 
 -- Seed Rooms Master Configuration (No. 1 to No. 5 - all Available)
 INSERT INTO public.rooms (id, room_number, room_type, capacity, facilities, status, weekday_rate, weekend_rate, price_per_night) VALUES
