@@ -365,7 +365,7 @@ export const AppProvider = ({ children }) => {
     }, 4000);
   };
 
-  // --- INITIAL SUPABASE DATA FETCH ---
+  // --- INITIAL SUPABASE DATA FETCH & REALTIME CROSS-DEVICE SYNC ---
   useEffect(() => {
     const fetchSupabaseData = async () => {
       try {
@@ -379,13 +379,13 @@ export const AppProvider = ({ children }) => {
         ]);
 
         let activeBookingsList = bookings;
-        if (!bookingsRes.error && bookingsRes.data && bookingsRes.data.length > 0) {
+        if (!bookingsRes.error && Array.isArray(bookingsRes.data)) {
           activeBookingsList = bookingsRes.data;
           setBookings(bookingsRes.data);
           try { localStorage.setItem('somajam_bookings', JSON.stringify(bookingsRes.data)); } catch(e){}
         }
 
-        if (!roomsRes.error && roomsRes.data && roomsRes.data.length > 0) {
+        if (!roomsRes.error && Array.isArray(roomsRes.data) && roomsRes.data.length > 0) {
           const reconciled = reconcileRoomStatuses(roomsRes.data, activeBookingsList);
           setRooms(reconciled);
           try { localStorage.setItem('somajam_rooms', JSON.stringify(reconciled)); } catch(e){}
@@ -394,19 +394,19 @@ export const AppProvider = ({ children }) => {
         }
 
         // Guests
-        if (!guestsRes.error && guestsRes.data && guestsRes.data.length > 0) {
+        if (!guestsRes.error && Array.isArray(guestsRes.data)) {
           setGuests(guestsRes.data);
           try { localStorage.setItem('somajam_guests', JSON.stringify(guestsRes.data)); } catch(e){}
         }
 
         // Documents
-        if (!docsRes.error && docsRes.data && docsRes.data.length > 0) {
+        if (!docsRes.error && Array.isArray(docsRes.data)) {
           setDocuments(docsRes.data);
           try { localStorage.setItem('somajam_documents', JSON.stringify(docsRes.data)); } catch(e){}
         }
 
         // Staff
-        if (!staffRes.error && staffRes.data && staffRes.data.length > 0) {
+        if (!staffRes.error && Array.isArray(staffRes.data) && staffRes.data.length > 0) {
           setStaffList(staffRes.data);
           try { localStorage.setItem('somajam_staff', JSON.stringify(staffRes.data)); } catch(e){}
         }
@@ -437,7 +437,7 @@ export const AppProvider = ({ children }) => {
           .select('*')
           .order('created_at', { ascending: false })
           .limit(200);
-        if (!auditErr && auditData && auditData.length > 0) {
+        if (!auditErr && Array.isArray(auditData)) {
           setAuditLogs(auditData);
           try { localStorage.setItem('somajam_audit_logs', JSON.stringify(auditData)); } catch(e){}
         }
@@ -447,6 +447,49 @@ export const AppProvider = ({ children }) => {
     };
 
     fetchSupabaseData();
+
+    // Cross-Device Realtime Listener (Instant sync across laptop & mobile)
+    let channel = null;
+    try {
+      channel = supabase
+        .channel('schema-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+          fetchSupabaseData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => {
+          fetchSupabaseData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'guests' }, () => {
+          fetchSupabaseData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => {
+          fetchSupabaseData();
+        })
+        .subscribe();
+    } catch (e) {
+      console.warn('Realtime subscription not active:', e);
+    }
+
+    // Auto re-fetch when user switches back to browser tab or mobile app resumes
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchSupabaseData();
+      }
+    };
+    const handleFocus = () => fetchSupabaseData();
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('online', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch (e) {}
+      }
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('online', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   // Role Switcher Handler
