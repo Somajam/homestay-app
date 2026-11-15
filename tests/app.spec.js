@@ -6,9 +6,10 @@ test.describe('Somajam Homestay Web Application - Thorough E2E Tests', () => {
     await page.goto('/');
 
     // Check if on login page and authenticate if needed
-    const autoFillBtn = page.getByRole('button', { name: 'Auto Fill' });
-    if (await autoFillBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
-      await autoFillBtn.click();
+    const usernameInput = page.locator('input[placeholder="Enter admin username"]');
+    if (await usernameInput.isVisible({ timeout: 2500 }).catch(() => false)) {
+      await usernameInput.fill('admin');
+      await page.locator('input[placeholder="Enter password"]').fill('somajam2026');
       await page.getByRole('button', { name: 'Sign In to Portal' }).click();
       await expect(page.locator('h2:has-text("Parunthumpara Operations")')).toBeVisible({ timeout: 10000 });
     }

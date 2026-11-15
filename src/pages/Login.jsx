@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Lock, User, Eye, EyeOff, LogIn, ShieldCheck, KeyRound } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, LogIn, ShieldCheck } from 'lucide-react';
 
 export const Login = () => {
   const { login, showToast } = useApp();
@@ -28,12 +28,6 @@ export const Login = () => {
       setErrorMessage(result.message || 'Invalid Username or Password');
       showToast('Login failed. Please check credentials.', 'error');
     }
-  };
-
-  const handleQuickFill = () => {
-    setUsername('admin');
-    setPassword('somajam2026');
-    setErrorMessage('');
   };
 
   return (
@@ -128,23 +122,6 @@ export const Login = () => {
             {isSubmitting ? 'Verifying Credentials...' : 'Sign In to Portal'}
           </button>
         </form>
-
-        {/* Quick Fill / Hint Helper */}
-        <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div className="text-[11px] text-slate-400">
-              Default: <strong className="text-slate-200">admin</strong> / <strong className="text-slate-200">somajam2026</strong>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleQuickFill}
-            className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-[11px] font-bold border border-emerald-500/30 transition-all"
-          >
-            Auto Fill
-          </button>
-        </div>
 
         {/* Footer Note */}
         <p className="text-[10px] text-center text-slate-500">

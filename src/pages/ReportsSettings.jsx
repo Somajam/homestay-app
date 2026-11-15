@@ -931,14 +931,16 @@ export const ReportsSettings = () => {
                 const isOccupied = bookings.some(
                   (b) => b && b.status === 'Checked In' && isRoomMatch(r, b)
                 );
-                const effectiveStatus = r.status === 'Maintenance' ? 'Maintenance' : (isOccupied || r.status === 'Occupied' ? 'Occupied' : 'Available');
+                const effectiveStatus = r.status === 'Maintenance' ? 'Maintenance' : (isOccupied ? 'Occupied' : 'Available');
                 return (
                   <div key={r.id} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
                     <span className="text-xs font-bold text-slate-300">Room {r.room_number}</span>
                     <div className="text-sm font-bold text-slate-100">{r.room_type}</div>
                     <span
                       className={`text-[11px] font-semibold block px-2 py-0.5 rounded text-center ${
-                        isOccupied
+                        effectiveStatus === 'Maintenance'
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          : isOccupied
                           ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                           : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                       }`}

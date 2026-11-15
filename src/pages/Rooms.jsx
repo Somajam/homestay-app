@@ -103,7 +103,7 @@ export const Rooms = () => {
           const activeBooking = bookings.find(
             (b) => b && b.status === 'Checked In' && isRoomMatch(room, b)
           );
-          const effectiveStatus = room.status === 'Maintenance' ? 'Maintenance' : (activeBooking || room.status === 'Occupied' ? 'Occupied' : 'Available');
+          const effectiveStatus = room.status === 'Maintenance' ? 'Maintenance' : (activeBooking ? 'Occupied' : 'Available');
 
           const weekdayRate = room.weekday_rate ?? room.price_per_night ?? 3500;
           const weekendRate = room.weekend_rate ?? (room.weekday_rate ? Math.round(room.weekday_rate * 1.25) : 4500);
@@ -198,7 +198,7 @@ export const Rooms = () => {
                 </div>
 
                 {/* Occupant Card if Occupied */}
-                {room.status === 'Occupied' && activeBooking && (
+                {effectiveStatus === 'Occupied' && activeBooking && (
                   <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 space-y-1">
                     <p className="text-[10px] text-rose-300 font-semibold uppercase tracking-wider">
                       Current Occupant
@@ -216,7 +216,7 @@ export const Rooms = () => {
               {/* Status Action & Edit Buttons */}
               <div className="pt-3 border-t border-slate-800 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  {room.status === 'Maintenance' ? (
+                  {effectiveStatus === 'Maintenance' ? (
                     <button
                       onClick={() => updateRoomStatus(room.id, 'Available')}
                       className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-900/30 cursor-pointer"
@@ -224,7 +224,7 @@ export const Rooms = () => {
                       <CheckCircle2 className="w-4 h-4" />
                       Set Available
                     </button>
-                  ) : room.status === 'Available' ? (
+                  ) : effectiveStatus === 'Available' ? (
                     <button
                       onClick={() => updateRoomStatus(room.id, 'Maintenance')}
                       className="w-full py-2 rounded-xl bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border border-slate-700 hover:border-amber-500 cursor-pointer"

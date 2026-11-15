@@ -11,8 +11,8 @@ test.describe('Somajam Homestay - Comprehensive End-to-End Master Lifecycle & Ed
     await page.goto('/');
 
     // 1.1 Verify Login Screen loads
-    const autoFillBtn = page.getByRole('button', { name: 'Auto Fill' });
-    await expect(autoFillBtn).toBeVisible({ timeout: 10000 });
+    const signInBtn = page.getByRole('button', { name: 'Sign In to Portal' });
+    await expect(signInBtn).toBeVisible({ timeout: 10000 });
 
     // 1.2 Invalid Credentials Test (with fast timeout fallback)
     await page.fill('input[placeholder="Enter admin username"]', 'unauthorized_user');
@@ -34,7 +34,8 @@ test.describe('Somajam Homestay - Comprehensive End-to-End Master Lifecycle & Ed
     // 1.4 Switch to Admin / Owner
     await page.click('button:has-text("Sign Out")');
     await expect(page.locator('h1:has-text("Somajam Holidays")')).toBeVisible();
-    await autoFillBtn.click();
+    await page.fill('input[placeholder="Enter admin username"]', 'admin');
+    await page.fill('input[placeholder="Enter password"]', 'somajam2026');
     await page.click('button:has-text("Sign In to Portal")');
     await page.locator('a[href="/"]').first().click();
     await expect(page.locator('h2:has-text("Parunthumpara Operations")')).toBeVisible({ timeout: 10000 });

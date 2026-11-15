@@ -278,7 +278,7 @@ The application is structured into **7 responsive screens**:
 
 | Route | Screen Name | Key Components & Modals |
 | :--- | :--- | :--- |
-| `/login` | **Authentication Portal** | Secure login form, default credentials auto-filler, role detection (`admin`, `caretaker`), brand styling |
+| `/login` | **Authentication Portal** | Secure login form, role detection (`admin`, `caretaker`), brand styling |
 | `/` | **Operations Dashboard** | Metrics cards, Arrivals queue, Departures queue, Upcoming bookings queue, `BookingModal`, `GuestModal`, `DocumentUploadModal`, `CheckInModal`, `CheckOutModal` |
 | `/guests` | **Guest Management & Archives** | Compliance filter, search bar, Guest table, Guest Detail Drawer (3 tabs), `GuestModal`, `DocumentUploadModal`, `DocumentViewerModal`, Monthly archive quick link |
 | `/bookings` | **Booking & Check-In Hub** | View mode switcher (List vs Calendar), `MonthlyCalendarView`, status tabs, cottage filter, `BookingModal`, `CheckInModal`, `CheckOutModal`, `BookingAuditModal` |
@@ -509,7 +509,7 @@ Rejchachan homestay/
 3. **Open Application**:
    * **Portal URL:** `http://localhost:5173/`
    * **Default Logins:**
-     * **Admin Access:** Username: `admin` / Password: `somajam2026` *(Or click "Auto Fill")*
+     * **Admin Access:** Username: `admin` / Password: `somajam2026`
      * **Caretaker Access:** Username: `caretaker` / Password: `caretaker2026`
 
 4. **Run Automated Test Suites**:
