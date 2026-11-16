@@ -5,6 +5,7 @@ import { DocumentViewerModal } from '../components/modals/DocumentViewerModal';
 import { exportMonthlyVisitorArchive, downloadBlob } from '../utils/archiveExporter';
 import { getBookingTimestamps } from '../utils/dateUtils';
 import { sanitizePhoneNumber, isValidPhoneNumber } from '../utils/phoneValidation';
+import { MonthlyFinancialReport } from '../components/reports/MonthlyFinancialReport';
 import {
   BarChart3,
   Download,
@@ -32,6 +33,9 @@ import {
   RefreshCw,
   Clock,
   ArrowRight,
+  TrendingUp,
+  Wallet,
+  Receipt,
 } from 'lucide-react';
 
 export const ReportsSettings = () => {
@@ -42,6 +46,8 @@ export const ReportsSettings = () => {
     documents = [],
     staffList = [],
     auditLogs = [],
+    expenses = [],
+    expensePayers = [],
     addStaff,
     currentRole,
     currentUser,
@@ -49,7 +55,7 @@ export const ReportsSettings = () => {
     showToast,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState('guest_register'); // 'guest_register' | 'monthly_archive' | 'reports' | 'history' | 'staff'
+  const [activeTab, setActiveTab] = useState('guest_register'); // 'guest_register' | 'financial_report' | 'monthly_archive' | 'reports' | 'history' | 'staff'
 
   // Staff Modal state
   const [showStaffModal, setShowStaffModal] = useState(false);
@@ -422,6 +428,18 @@ export const ReportsSettings = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('financial_report')}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 ${
+            activeTab === 'financial_report'
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
+              : 'bg-slate-900 text-slate-400 border border-slate-800 hover:bg-slate-800'
+          }`}
+        >
+          <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Monthly Income & Expense Report</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('monthly_archive')}
           className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 ${
             activeTab === 'monthly_archive'
@@ -733,6 +751,18 @@ export const ReportsSettings = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* TAB: MONTHLY FINANCIAL REPORT (INCOME & EXPENSES)          */}
+      {/* ======================================================== */}
+      {activeTab === 'financial_report' && (
+        <MonthlyFinancialReport
+          bookings={bookings}
+          expenses={expenses}
+          expensePayers={expensePayers}
+          rooms={rooms}
+        />
       )}
 
       {/* ======================================================== */}
