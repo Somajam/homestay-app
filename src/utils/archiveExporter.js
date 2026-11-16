@@ -90,6 +90,11 @@ export const exportMonthlyVisitorArchive = async ({
     'Nights',
     'Guests Count',
     'Booking Status',
+    'Room Bill (INR)',
+    'Room Extras (INR)',
+    'Total Billed (INR)',
+    'Referred By',
+    'Referral Commission (INR)',
     'Attached Documents',
     'Special Notes',
   ];
@@ -109,6 +114,14 @@ export const exportMonthlyVisitorArchive = async ({
           ? Math.max(1, Math.round((outDate - inDate) / (1000 * 60 * 60 * 24)))
           : 1;
 
+        const roomBill = Number(b.bill_amount ?? b.total_price ?? 0);
+        const extrasTotal = Array.isArray(b.room_expenses)
+          ? b.room_expenses.reduce((s, x) => s + (Number(x.amount) || 0), 0)
+          : 0;
+        const grandTotal = roomBill + extrasTotal;
+        const referredBy = b.referred_by || 'Direct';
+        const referralComm = Number(b.referral_commission || 0);
+
         visitorRows.push([
           g.id,
           g.full_name,
@@ -127,6 +140,11 @@ export const exportMonthlyVisitorArchive = async ({
           nights,
           b.num_guests || 2,
           b.status,
+          roomBill,
+          extrasTotal,
+          grandTotal,
+          referredBy,
+          referralComm,
           docNames,
           b.notes || g.notes || '',
         ]);

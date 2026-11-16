@@ -6,6 +6,7 @@ import { CheckOutModal } from '../components/modals/CheckOutModal';
 import { BookingModal } from '../components/modals/BookingModal';
 import { GuestModal } from '../components/modals/GuestModal';
 import { DocumentUploadModal } from '../components/modals/DocumentUploadModal';
+import { RoomExpensesModal } from '../components/modals/RoomExpensesModal';
 import {
   LogIn,
   LogOut,
@@ -19,6 +20,7 @@ import {
   Clock,
   ShieldAlert,
   XCircle,
+  Receipt,
 } from 'lucide-react';
 
 export const Dashboard = () => {
@@ -26,6 +28,7 @@ export const Dashboard = () => {
 
   const [activeCheckInBooking, setActiveCheckInBooking] = useState(null);
   const [activeCheckOutBooking, setActiveCheckOutBooking] = useState(null);
+  const [activeRoomExpensesBooking, setActiveRoomExpensesBooking] = useState(null);
 
   // Modals state
   const [showBookingModal, setShowBookingModal] = useState(false);
@@ -77,6 +80,9 @@ export const Dashboard = () => {
     );
     return !isOccupied;
   });
+
+  // In-House Active Stays (All currently checked-in guests across all rooms)
+  const inHouseBookings = safeBookings.filter((b) => b && b.status === 'Checked In');
 
   // Upcoming Bookings: Strictly future or today's confirmed bookings (exclude any past dates that were not checked in)
   const upcomingBookings = safeBookings
@@ -316,13 +322,28 @@ export const Dashboard = () => {
                         Room: <strong className="text-slate-200">{b.room_number}</strong>
                       </p>
                     </div>
-                    <button
-                      onClick={() => setActiveCheckOutBooking(b)}
-                      className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-md shadow-amber-900/30 shrink-0 flex items-center gap-1.5"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      Check Out
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setActiveRoomExpensesBooking(b)}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                        title="Add extra room expenses / incidentals"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Extras</span>
+                        {b.room_expenses?.length > 0 && (
+                          <span className="bg-emerald-500/30 px-1 py-0.2 text-[10px] rounded-full">
+                            {b.room_expenses.length}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setActiveCheckOutBooking(b)}
+                        className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-md shadow-amber-900/30 shrink-0 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Check Out
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -330,6 +351,71 @@ export const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Active In-House Guests & Room Incidentals */}
+      {inHouseBookings.length > 0 && (
+        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <BedDouble className="w-5 h-5 text-emerald-400" />
+              <h3 className="font-bold text-sm text-slate-100">
+                Active In-House Cottages & Room Extras ({inHouseBookings.length})
+              </h3>
+            </div>
+            <span className="text-[11px] font-mono bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
+              Live Stays
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {inHouseBookings.map((b) => {
+              const extras = Array.isArray(b.room_expenses) ? b.room_expenses : [];
+              const extrasTotal = extras.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+              const roomBill = Number(b.bill_amount ?? b.total_amount ?? 0);
+              return (
+                <div
+                  key={b.id}
+                  className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 hover:border-slate-700 transition-all flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-400 font-mono">{b.room_number}</span>
+                      <span className="text-[10px] font-mono text-slate-500">{b.booking_ref}</span>
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-100 mt-1">{b.guest_name}</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Departing: <strong className="text-slate-200">{b.check_out_date}</strong>
+                    </p>
+                    <div className="mt-2 pt-2 border-t border-slate-900 flex items-center justify-between text-[11px]">
+                      <span className="text-slate-400">Stay Bill: <strong className="text-slate-200">₹{roomBill.toLocaleString()}</strong></span>
+                      {extrasTotal > 0 && (
+                        <span className="text-amber-400 font-mono font-semibold">+ ₹{extrasTotal.toLocaleString()} extras</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-900">
+                    <button
+                      onClick={() => setActiveRoomExpensesBooking(b)}
+                      className="w-full py-1.5 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Room Expense {extras.length > 0 ? `(${extras.length})` : ''}
+                    </button>
+                    <button
+                      onClick={() => setActiveCheckOutBooking(b)}
+                      className="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer"
+                      title="Check Out"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Upcoming Bookings Preview */}
       <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
@@ -419,7 +505,14 @@ export const Dashboard = () => {
       <CheckOutModal
         isOpen={!!activeCheckOutBooking}
         onClose={() => setActiveCheckOutBooking(null)}
-        booking={activeCheckOutBooking}
+        booking={activeCheckOutBooking ? (bookings.find(b => b.id === activeCheckOutBooking.id) || activeCheckOutBooking) : null}
+      />
+
+      {/* Room Expenses Modal */}
+      <RoomExpensesModal
+        isOpen={!!activeRoomExpensesBooking}
+        onClose={() => setActiveRoomExpensesBooking(null)}
+        booking={activeRoomExpensesBooking ? (bookings.find(b => b.id === activeRoomExpensesBooking.id) || activeRoomExpensesBooking) : null}
       />
 
       {/* Add Booking Modal */}

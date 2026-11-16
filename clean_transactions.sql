@@ -41,6 +41,20 @@ WHERE status != 'Available';
 -- Optional: If you also want to remove test expenses logged during testing, uncomment below:
 -- TRUNCATE TABLE public.expenses CASCADE;
 
+-- 7. Ensure new booking billing, referral & incidental columns exist
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS bill_amount NUMERIC;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS referred_by TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS referral_commission NUMERIC DEFAULT 0;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS room_expenses JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS total_amount NUMERIC;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS total_nights INT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS weekday_nights INT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS weekend_nights INT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS weekday_rate NUMERIC;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS weekend_rate NUMERIC;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS checked_out_at TIMESTAMPTZ;
+
 -- ====================================================================
 -- VERIFICATION QUERY
 -- Run this block to confirm transaction tables are empty and master data is intact:

@@ -47,9 +47,35 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   check_out_date DATE NOT NULL,
   num_guests INT NOT NULL DEFAULT 2,
   status TEXT NOT NULL DEFAULT 'Confirmed',
+  bill_amount NUMERIC,
+  referred_by TEXT,
+  referral_commission NUMERIC DEFAULT 0,
+  room_expenses JSONB DEFAULT '[]'::jsonb,
+  total_amount NUMERIC,
+  total_nights INT,
+  weekday_nights INT,
+  weekend_nights INT,
+  weekday_rate NUMERIC,
+  weekend_rate NUMERIC,
+  checked_in_at TIMESTAMPTZ,
+  checked_out_at TIMESTAMPTZ,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure columns exist if table was already created
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS bill_amount NUMERIC;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS referred_by TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS referral_commission NUMERIC DEFAULT 0;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS room_expenses JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS total_amount NUMERIC;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS total_nights INT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS weekday_nights INT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS weekend_nights INT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS weekday_rate NUMERIC;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS weekend_rate NUMERIC;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS checked_out_at TIMESTAMPTZ;
 
 -- 4. Create Documents Table (ID Proof Archives)
 CREATE TABLE IF NOT EXISTS public.documents (

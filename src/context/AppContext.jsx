@@ -25,6 +25,23 @@ export const normalizeRoom = (r) => {
 };
 
 /**
+ * Normalizes booking records to guarantee consistent presence of billing, referral, and incidentals.
+ */
+export const normalizeBooking = (b) => {
+  if (!b) return b;
+  const stayAmt = b.bill_amount != null && b.bill_amount !== ''
+    ? Number(b.bill_amount)
+    : (b.total_amount != null ? Number(b.total_amount) : 0);
+  return {
+    ...b,
+    bill_amount: stayAmt,
+    referred_by: b.referred_by || '',
+    referral_commission: Number(b.referral_commission) || 0,
+    room_expenses: Array.isArray(b.room_expenses) ? b.room_expenses : [],
+  };
+};
+
+/**
  * Universal room matching helper to reliably match rooms and bookings
  * regardless of whether room_id or room_number is stored as 'room-1', '1', 'No. 1', 'Room 1', etc.
  */
@@ -313,10 +330,10 @@ export const AppProvider = ({ children }) => {
       const saved = localStorage.getItem('somajam_bookings');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.map(normalizeBooking);
       }
     } catch (e) {}
-    return initialBookings;
+    return initialBookings.map(normalizeBooking);
   });
 
   const [documents, setDocuments] = useState(() => {
@@ -380,9 +397,9 @@ export const AppProvider = ({ children }) => {
 
         let activeBookingsList = bookings;
         if (!bookingsRes.error && Array.isArray(bookingsRes.data)) {
-          activeBookingsList = bookingsRes.data;
-          setBookings(bookingsRes.data);
-          try { localStorage.setItem('somajam_bookings', JSON.stringify(bookingsRes.data)); } catch(e){}
+          activeBookingsList = bookingsRes.data.map(normalizeBooking);
+          setBookings(activeBookingsList);
+          try { localStorage.setItem('somajam_bookings', JSON.stringify(activeBookingsList)); } catch(e){}
         }
 
         if (!roomsRes.error && Array.isArray(roomsRes.data) && roomsRes.data.length > 0) {
@@ -764,6 +781,12 @@ export const AppProvider = ({ children }) => {
       const stayPricing = calculateStayRate(room, check_in_date, check_out_date);
 
       const nowIso = new Date().toISOString();
+      const standardStayTotal = Number(bookingData.total_amount) || stayPricing.totalAmount;
+      const finalBillAmount =
+        bookingData.bill_amount != null && bookingData.bill_amount !== ''
+          ? Number(bookingData.bill_amount)
+          : standardStayTotal;
+
       const newBooking = {
         id: `bkg-${Date.now()}-${idx}`,
         booking_ref: refNum,
@@ -778,12 +801,16 @@ export const AppProvider = ({ children }) => {
         num_guests: Number(bookingData.num_guests) || (room ? room.capacity : 2),
         status: finalStatus,
         notes: bookingData.notes || '',
+        bill_amount: finalBillAmount,
+        referred_by: (bookingData.referred_by || '').trim(),
+        referral_commission: Number(bookingData.referral_commission) || 0,
+        room_expenses: [],
         weekday_nights: stayPricing.weekdayNights,
         weekend_nights: stayPricing.weekendNights,
         total_nights: stayPricing.totalNights,
         weekday_rate: stayPricing.weekdayRate,
         weekend_rate: stayPricing.weekendRate,
-        total_amount: Number(bookingData.total_amount) || stayPricing.totalAmount,
+        total_amount: standardStayTotal,
         created_at: nowIso,
       };
 
@@ -811,7 +838,13 @@ export const AppProvider = ({ children }) => {
 
     // Background sync with Supabase and log activity
     createdBookings.forEach((bkg) => {
-      supabase.from('bookings').insert([bkg]).then().catch((err) => {
+      supabase.from('bookings').insert([bkg]).then(({ error }) => {
+        if (error) {
+          // Fallback if newly added columns are not yet recognized in schema cache
+          const { bill_amount, referred_by, referral_commission, room_expenses, ...fallbackBkg } = bkg;
+          supabase.from('bookings').insert([fallbackBkg]).then().catch(() => {});
+        }
+      }).catch((err) => {
         console.warn('Background Supabase booking sync failed (using local store):', err);
       });
 
@@ -822,6 +855,9 @@ export const AppProvider = ({ children }) => {
         check_in_date: bkg.check_in_date,
         check_out_date: bkg.check_out_date,
         num_guests: bkg.num_guests,
+        bill_amount: bkg.bill_amount,
+        referred_by: bkg.referred_by,
+        referral_commission: bkg.referral_commission,
         total_amount: bkg.total_amount,
         status: bkg.status,
       });
@@ -903,9 +939,16 @@ export const AppProvider = ({ children }) => {
     const booking = bookings.find((b) => String(b.id) === String(bookingId));
     if (!booking) return;
 
+    const extraTotal = Array.isArray(booking.room_expenses)
+      ? booking.room_expenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+      : 0;
+    const roomStayBill = Number(booking.bill_amount ?? booking.total_amount ?? 0);
+    const grandTotal = roomStayBill + extraTotal;
+
+    const settlementSummary = `Settled at Checkout: ₹${grandTotal.toLocaleString()} (Room Stay: ₹${roomStayBill.toLocaleString()}${extraTotal > 0 ? ` + Incidentals: ₹${extraTotal.toLocaleString()}` : ''})`;
     const updatedNotes = staffNotes
-      ? `${booking.notes || ''} | Check-out Notes: ${staffNotes}`
-      : booking.notes;
+      ? `${booking.notes || ''} | ${settlementSummary} | Notes: ${staffNotes}`
+      : `${booking.notes || ''} | ${settlementSummary}`;
     const checkOutTimestamp = new Date().toISOString();
 
     const updatedBookings = bookings.map((b) =>
@@ -929,6 +972,9 @@ export const AppProvider = ({ children }) => {
       guest_name: booking.guest_name,
       room_number: booking.room_number,
       staff_notes: staffNotes,
+      room_stay_bill: roomStayBill,
+      room_expenses_total: extraTotal,
+      grand_total_settled: grandTotal,
       checked_out_at: checkOutTimestamp,
     });
 
@@ -943,6 +989,104 @@ export const AppProvider = ({ children }) => {
     }
 
     showToast(`Checked Out successfully! Room marked AVAILABLE.`);
+  };
+
+  // --- ROOM INCIDENTALS & EXTRA EXPENSES HANDLERS ---
+  const addRoomExpense = async (bookingId, expenseItem) => {
+    const booking = bookings.find((b) => String(b.id) === String(bookingId));
+    if (!booking) return false;
+
+    const newExpenseEntry = {
+      id: `rxp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      description: (expenseItem.description || 'Extra Expense').trim(),
+      amount: Number(expenseItem.amount) || 0,
+      created_at: new Date().toISOString(),
+    };
+
+    const currentExpenses = Array.isArray(booking.room_expenses) ? booking.room_expenses : [];
+    const updatedExpenses = [...currentExpenses, newExpenseEntry];
+
+    const updatedBookings = bookings.map((b) =>
+      String(b.id) === String(bookingId)
+        ? { ...b, room_expenses: updatedExpenses }
+        : b
+    );
+
+    setBookings(updatedBookings);
+    try { localStorage.setItem('somajam_bookings', JSON.stringify(updatedBookings)); } catch (e) {}
+
+    // Cloud sync with Supabase
+    supabase.from('bookings').update({ room_expenses: updatedExpenses }).eq('id', bookingId).then(({ error }) => {
+      if (error) console.warn('Supabase room_expenses update notice:', error.message);
+    }).catch(() => {});
+
+    // Log in audit trail
+    logBookingAction(booking.id, booking.booking_ref, 'ROOM_EXPENSE_ADDED', {
+      description: newExpenseEntry.description,
+      amount: newExpenseEntry.amount,
+      room_number: booking.room_number,
+    });
+
+    showToast(`Added ${newExpenseEntry.description} (₹${newExpenseEntry.amount.toLocaleString()}) to ${booking.room_number}`);
+    return true;
+  };
+
+  const removeRoomExpense = async (bookingId, expenseId) => {
+    const booking = bookings.find((b) => String(b.id) === String(bookingId));
+    if (!booking) return false;
+
+    const currentExpenses = Array.isArray(booking.room_expenses) ? booking.room_expenses : [];
+    const itemToRemove = currentExpenses.find((e) => e.id === expenseId);
+    const updatedExpenses = currentExpenses.filter((e) => e.id !== expenseId);
+
+    const updatedBookings = bookings.map((b) =>
+      String(b.id) === String(bookingId)
+        ? { ...b, room_expenses: updatedExpenses }
+        : b
+    );
+
+    setBookings(updatedBookings);
+    try { localStorage.setItem('somajam_bookings', JSON.stringify(updatedBookings)); } catch (e) {}
+
+    // Cloud sync with Supabase
+    supabase.from('bookings').update({ room_expenses: updatedExpenses }).eq('id', bookingId).then().catch(() => {});
+
+    // Log in audit trail
+    if (itemToRemove) {
+      logBookingAction(booking.id, booking.booking_ref, 'ROOM_EXPENSE_REMOVED', {
+        description: itemToRemove.description,
+        amount: itemToRemove.amount,
+        room_number: booking.room_number,
+      });
+    }
+
+    showToast('Expense item removed', 'info');
+    return true;
+  };
+
+  const updateBookingBill = async (bookingId, billData) => {
+    const booking = bookings.find((b) => String(b.id) === String(bookingId));
+    if (!booking) return false;
+
+    const updatedFields = {
+      bill_amount: billData.bill_amount != null ? Number(billData.bill_amount) : booking.bill_amount,
+      referred_by: billData.referred_by !== undefined ? billData.referred_by.trim() : booking.referred_by,
+      referral_commission: billData.referral_commission != null ? Number(billData.referral_commission) : booking.referral_commission,
+    };
+
+    const updatedBookings = bookings.map((b) =>
+      String(b.id) === String(bookingId)
+        ? { ...b, ...updatedFields }
+        : b
+    );
+
+    setBookings(updatedBookings);
+    try { localStorage.setItem('somajam_bookings', JSON.stringify(updatedBookings)); } catch (e) {}
+
+    supabase.from('bookings').update(updatedFields).eq('id', bookingId).then().catch(() => {});
+
+    showToast('Booking billing details updated');
+    return true;
   };
 
   const cancelBooking = async (bookingId) => {
@@ -1334,6 +1478,9 @@ export const AppProvider = ({ children }) => {
         processCheckIn,
         processCheckOut,
         cancelBooking,
+        addRoomExpense,
+        removeRoomExpense,
+        updateBookingBill,
         documents,
         addDocument,
         deleteDocument,

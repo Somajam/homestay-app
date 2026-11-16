@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp, isRoomMatch } from '../context/AppContext';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { RoomModal } from '../components/modals/RoomModal';
+import { RoomExpensesModal } from '../components/modals/RoomExpensesModal';
 import {
   BedDouble,
   Plus,
@@ -21,6 +22,7 @@ export const Rooms = () => {
   const [selectedType, setSelectedType] = useState('All');
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState(null);
+  const [selectedOccupantBooking, setSelectedOccupantBooking] = useState(null);
 
   const filteredRooms = rooms.filter(
     (r) => selectedType === 'All' || r.room_type === selectedType
@@ -199,16 +201,33 @@ export const Rooms = () => {
 
                 {/* Occupant Card if Occupied */}
                 {effectiveStatus === 'Occupied' && activeBooking && (
-                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 space-y-1">
-                    <p className="text-[10px] text-rose-300 font-semibold uppercase tracking-wider">
-                      Current Occupant
-                    </p>
-                    <p className="text-xs font-bold text-slate-100">
-                      {activeBooking.guest_name}
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Check-out scheduled: <strong>{activeBooking.check_out_date}</strong>
-                    </p>
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-rose-300 font-semibold uppercase tracking-wider">
+                        Current Occupant
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOccupantBooking(activeBooking)}
+                        className="px-2 py-0.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                        title="Add or manage extra expenses for this stay"
+                      >
+                        <Plus className="w-3 h-3" /> Extras {activeBooking.room_expenses?.length > 0 ? `(${activeBooking.room_expenses.length})` : ''}
+                      </button>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-100">
+                        {activeBooking.guest_name}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Check-out scheduled: <strong>{activeBooking.check_out_date}</strong>
+                      </p>
+                      {activeBooking.room_expenses?.length > 0 && (
+                        <p className="text-[10px] text-amber-400 font-mono mt-0.5 font-semibold">
+                          Incidentals logged: ₹{activeBooking.room_expenses.reduce((s, x) => s + (Number(x.amount) || 0), 0).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -262,6 +281,13 @@ export const Rooms = () => {
           setShowRoomModal(false);
           setEditingRoom(null);
         }}
+      />
+
+      {/* Room Incidentals & Expenses Modal */}
+      <RoomExpensesModal
+        isOpen={!!selectedOccupantBooking}
+        onClose={() => setSelectedOccupantBooking(null)}
+        booking={selectedOccupantBooking ? bookings.find((b) => b.id === selectedOccupantBooking.id) || selectedOccupantBooking : null}
       />
     </div>
   );

@@ -160,6 +160,11 @@ export const ReportsSettings = () => {
       'ID / Aadhaar Number',
       'Guests Count',
       'Status',
+      'Room Bill Amount (INR)',
+      'Room Extras (INR)',
+      'Grand Total (INR)',
+      'Referred By',
+      'Referral Commission (INR)',
       'Special Notes',
     ];
 
@@ -171,6 +176,14 @@ export const ReportsSettings = () => {
       const nights = !isNaN(inDate) && !isNaN(outDate)
         ? Math.max(1, Math.round((outDate - inDate) / (1000 * 60 * 60 * 24)))
         : 1;
+
+      const roomBill = Number(b.bill_amount ?? b.total_price ?? 0);
+      const extrasTotal = Array.isArray(b.room_expenses)
+        ? b.room_expenses.reduce((s, x) => s + (Number(x.amount) || 0), 0)
+        : 0;
+      const grandTotal = roomBill + extrasTotal;
+      const referredBy = b.referred_by || 'Direct';
+      const referralComm = Number(b.referral_commission || 0);
 
       return [
         idx + 1,
@@ -190,6 +203,11 @@ export const ReportsSettings = () => {
         `"${guest?.id_document_number || 'N/A'}"`,
         b.num_guests || 2,
         `"${b.status}"`,
+        roomBill,
+        extrasTotal,
+        grandTotal,
+        `"${referredBy}"`,
+        referralComm,
         `"${(b.notes || '').replace(/"/g, '""')}"`,
       ];
     });

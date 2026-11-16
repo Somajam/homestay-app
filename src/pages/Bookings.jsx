@@ -5,6 +5,7 @@ import { CheckInModal } from '../components/modals/CheckInModal';
 import { CheckOutModal } from '../components/modals/CheckOutModal';
 import { BookingModal } from '../components/modals/BookingModal';
 import { BookingAuditModal } from '../components/modals/BookingAuditModal';
+import { RoomExpensesModal } from '../components/modals/RoomExpensesModal';
 import { MonthlyCalendarView } from '../components/calendar/MonthlyCalendarView';
 import {
   CalendarCheck,
@@ -18,6 +19,8 @@ import {
   CheckCircle,
   List,
   History,
+  Receipt,
+  Tag,
 } from 'lucide-react';
 import { calculateStayRate } from '../utils/pricing';
 import { getBookingTimestamps } from '../utils/dateUtils';
@@ -33,6 +36,7 @@ export const Bookings = () => {
   // Modals state
   const [activeCheckIn, setActiveCheckIn] = useState(null);
   const [activeCheckOut, setActiveCheckOut] = useState(null);
+  const [activeRoomExpenses, setActiveRoomExpenses] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedBookingDate, setSelectedBookingDate] = useState(null);
   const [showAuditModal, setShowAuditModal] = useState(false);
@@ -277,15 +281,37 @@ export const Bookings = () => {
                         );
                       })()}
                       {(() => {
-                        const totalAmt = b.total_amount || (() => {
-                          const room = rooms.find((r) => r.id === b.room_id || r.room_number === b.room_number);
-                          return room ? calculateStayRate(room, b.check_in_date, b.check_out_date).totalAmount : null;
-                        })();
-                        return totalAmt ? (
-                          <div className="text-[10px] text-emerald-400 font-mono mt-0.5 font-semibold">
-                            ₹{totalAmt.toLocaleString('en-IN')}
+                        const billAmt = b.bill_amount != null ? Number(b.bill_amount) : (Number(b.total_amount) || 0);
+                        const extras = Array.isArray(b.room_expenses) ? b.room_expenses : [];
+                        const extrasTotal = extras.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                        return (
+                          <div className="mt-1 space-y-0.5">
+                            <div className="text-[11px] font-mono font-bold text-emerald-400">
+                              ₹{billAmt.toLocaleString('en-IN')}
+                              {b.bill_amount && b.total_amount && b.bill_amount !== b.total_amount && (
+                                <span className="text-[9px] text-slate-500 line-through ml-1 font-normal">
+                                  ₹{Number(b.total_amount).toLocaleString('en-IN')}
+                                </span>
+                              )}
+                            </div>
+                            {extrasTotal > 0 && (
+                              <div className="text-[10px] font-mono text-amber-400 font-semibold">
+                                + ₹{extrasTotal.toLocaleString('en-IN')} extras ({extras.length})
+                              </div>
+                            )}
+                            {b.referred_by && (
+                              <div className="text-[10px] text-teal-400 flex items-center gap-1">
+                                <span className="text-slate-500">Ref:</span>
+                                <span>{b.referred_by}</span>
+                                {b.referral_commission > 0 && (
+                                  <span className="text-[9px] font-mono text-amber-400 bg-amber-500/10 px-1 rounded">
+                                    (₹{b.referral_commission})
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        ) : null;
+                        );
                       })()}
                     </td>
                     <td className="p-4 text-slate-300">{b.num_guests} Person(s)</td>
@@ -298,19 +324,34 @@ export const Bookings = () => {
                         {b.status === 'Confirmed' && (
                           <button
                             onClick={() => setActiveCheckIn(b)}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-emerald-900/30 transition-all"
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-emerald-900/30 transition-all cursor-pointer"
                           >
                             <LogIn className="w-3.5 h-3.5" /> Check In
                           </button>
                         )}
 
                         {b.status === 'Checked In' && (
-                          <button
-                            onClick={() => setActiveCheckOut(b)}
-                            className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-amber-900/30 transition-all"
-                          >
-                            <LogOut className="w-3.5 h-3.5" /> Check Out
-                          </button>
+                          <>
+                            <button
+                              onClick={() => setActiveRoomExpenses(b)}
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                              title="Add room incidentals or extra expenses"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Extras</span>
+                              {b.room_expenses?.length > 0 && (
+                                <span className="bg-emerald-500/30 px-1 py-0.2 text-[10px] rounded-full">
+                                  {b.room_expenses.length}
+                                </span>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => setActiveCheckOut(b)}
+                              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-amber-900/30 transition-all cursor-pointer"
+                            >
+                              <LogOut className="w-3.5 h-3.5" /> Check Out
+                            </button>
+                          </>
                         )}
 
                         {b.status === 'Checked Out' && (
@@ -355,7 +396,14 @@ export const Bookings = () => {
       <CheckOutModal
         isOpen={!!activeCheckOut}
         onClose={() => setActiveCheckOut(null)}
-        booking={activeCheckOut}
+        booking={activeCheckOut ? bookings.find((b) => b.id === activeCheckOut.id) || activeCheckOut : null}
+      />
+
+      {/* Room Incidentals & Expenses Modal */}
+      <RoomExpensesModal
+        isOpen={!!activeRoomExpenses}
+        onClose={() => setActiveRoomExpenses(null)}
+        booking={activeRoomExpenses ? bookings.find((b) => b.id === activeRoomExpenses.id) || activeRoomExpenses : null}
       />
 
       {/* Booking Modal */}

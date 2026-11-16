@@ -26,6 +26,7 @@ import {
   Sun,
   Moon,
   Sparkles,
+  Receipt,
 } from 'lucide-react';
 import { calculateMultiRoomStayRate } from '../../utils/pricing';
 import { sanitizePhoneNumber, isValidPhoneNumber } from '../../utils/phoneValidation';
@@ -76,11 +77,21 @@ export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
   const [previewDoc, setPreviewDoc] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Bill Amount, Referral & Commission State
+  const [billAmount, setBillAmount] = useState('');
+  const [isCustomBill, setIsCustomBill] = useState(false);
+  const [referredBy, setReferredBy] = useState('');
+  const [referralCommission, setReferralCommission] = useState('');
+
   // Auto-initialize clean form state and default room when modal opens
   useEffect(() => {
     if (isOpen) {
       setErrorMsg('');
       setIsMultiRoomMode(false);
+      setBillAmount('');
+      setIsCustomBill(false);
+      setReferredBy('');
+      setReferralCommission('');
       setQuickName('');
       setQuickPhone('');
       setDetailedGuest({
@@ -182,6 +193,13 @@ export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
   const stayCalculation = useMemo(() => {
     return calculateMultiRoomStayRate(selectedRoomsList, checkInDate, checkOutDate);
   }, [selectedRoomsList, checkInDate, checkOutDate]);
+
+  // Synchronize actual billed amount with calculated stay rate by default (until custom edited)
+  useEffect(() => {
+    if (!isCustomBill && stayCalculation && stayCalculation.totalAmount > 0) {
+      setBillAmount(String(stayCalculation.totalAmount));
+    }
+  }, [stayCalculation.totalAmount, isCustomBill]);
 
   // Check if phone or name matches an existing guest in database (in Quick or Detailed mode)
   const matchingExistingGuest = useMemo(() => {
@@ -364,6 +382,9 @@ export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
     }
 
     const bookingStatusToUse = bookingTab === 'quick' ? 'Confirmed' : initialStatus;
+    const finalBilledAmt = billAmount !== '' && !isNaN(Number(billAmount))
+      ? Number(billAmount)
+      : stayCalculation.totalAmount;
 
     // Multi-room booking creation
     const success = await addBooking({
@@ -376,6 +397,9 @@ export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
       booking_status: bookingStatusToUse,
       notes: notes,
       total_amount: stayCalculation.totalAmount,
+      bill_amount: finalBilledAmt,
+      referred_by: referredBy.trim(),
+      referral_commission: Number(referralCommission) || 0,
     });
 
     if (!success) {
@@ -978,6 +1002,112 @@ export const BookingModal = ({ isOpen, onClose, initialDate = null }) => {
                 )}
               </div>
             )}
+          </div>
+
+          {/* BILLING, ACTUAL DISCOUNTED AMOUNT & REFERRAL SOURCE */}
+          <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                <Receipt className="w-4 h-4 text-emerald-400" />
+                Billing Amount & Referral Attribution
+              </h4>
+              <span className="text-[10px] text-slate-400">Negotiated Rate & Referral Commission</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Actual Billed Amount */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                  <span>Actual Bill Amount (₹) *</span>
+                  {isCustomBill && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomBill(false);
+                        setBillAmount(String(stayCalculation.totalAmount));
+                      }}
+                      className="text-[10px] text-emerald-400 hover:underline"
+                    >
+                      Reset to Standard
+                    </button>
+                  )}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    data-testid="input-bill-amount"
+                    value={billAmount}
+                    onChange={(e) => {
+                      setBillAmount(e.target.value);
+                      setIsCustomBill(true);
+                    }}
+                    placeholder={String(stayCalculation.totalAmount)}
+                    className="w-full pl-7 pr-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <span className="text-[10px] text-slate-500 block mt-1">
+                  Actual amount after discounts/offers.
+                </span>
+              </div>
+
+              {/* Referred By */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Referred By
+                </label>
+                <input
+                  type="text"
+                  data-testid="input-referred-by"
+                  value={referredBy}
+                  onChange={(e) => setReferredBy(e.target.value)}
+                  placeholder="e.g. Direct, Airbnb, Driver Joy"
+                  className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500"
+                />
+                {/* Referral quick chips */}
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {['Direct', 'Airbnb', 'Agent', 'Friend'].map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setReferredBy(chip)}
+                      className={`text-[9px] px-1.5 py-0.5 rounded transition-colors ${
+                        referredBy === chip
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                      }`}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Referral Commission */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Referral Commission (₹)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    data-testid="input-referral-commission"
+                    value={referralCommission}
+                    onChange={(e) => setReferralCommission(e.target.value)}
+                    placeholder="0"
+                    className="w-full pl-7 pr-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-amber-400 font-mono focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <span className="text-[10px] text-slate-500 block mt-1">
+                  Commission payable to referrer.
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Guest Count & Notes */}
