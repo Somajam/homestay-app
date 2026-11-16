@@ -838,10 +838,30 @@ export const AppProvider = ({ children }) => {
 
     // Background sync with Supabase and log activity
     createdBookings.forEach((bkg) => {
-      supabase.from('bookings').insert([bkg]).then(({ error }) => {
+      const dbPayload = {
+        id: bkg.id,
+        booking_ref: bkg.booking_ref,
+        guest_id: bkg.guest_id,
+        guest_name: bkg.guest_name,
+        room_id: bkg.room_id,
+        room_number: bkg.room_number,
+        check_in_date: bkg.check_in_date,
+        check_out_date: bkg.check_out_date,
+        num_guests: bkg.num_guests,
+        status: bkg.status,
+        notes: bkg.notes || '',
+        bill_amount: bkg.bill_amount != null ? Number(bkg.bill_amount) : null,
+        referred_by: bkg.referred_by || null,
+        referral_commission: Number(bkg.referral_commission) || 0,
+        room_expenses: Array.isArray(bkg.room_expenses) ? bkg.room_expenses : [],
+        created_at: bkg.created_at,
+      };
+
+      supabase.from('bookings').insert([dbPayload]).then(({ error }) => {
         if (error) {
+          console.warn('Supabase booking insert warning:', error.message);
           // Fallback if newly added columns are not yet recognized in schema cache
-          const { bill_amount, referred_by, referral_commission, room_expenses, ...fallbackBkg } = bkg;
+          const { bill_amount, referred_by, referral_commission, room_expenses, ...fallbackBkg } = dbPayload;
           supabase.from('bookings').insert([fallbackBkg]).then().catch(() => {});
         }
       }).catch((err) => {
@@ -923,7 +943,7 @@ export const AppProvider = ({ children }) => {
     });
 
     try {
-      supabase.from('bookings').update({ status: 'Checked In', notes: updatedNotes, checked_in_at: checkInTimestamp }).eq('id', bookingId).then().catch(() => {});
+      supabase.from('bookings').update({ status: 'Checked In', notes: updatedNotes }).eq('id', bookingId).then().catch(() => {});
       const matchedRoom = rooms.find((r) => isRoomMatch(r, booking));
       if (matchedRoom) {
         supabase.from('rooms').update({ status: 'Occupied' }).eq('id', matchedRoom.id).then().catch(() => {});
@@ -979,7 +999,7 @@ export const AppProvider = ({ children }) => {
     });
 
     try {
-      supabase.from('bookings').update({ status: 'Checked Out', notes: updatedNotes, checked_out_at: checkOutTimestamp }).eq('id', bookingId).then().catch(() => {});
+      supabase.from('bookings').update({ status: 'Checked Out', notes: updatedNotes }).eq('id', bookingId).then().catch(() => {});
       const matchedRoom = rooms.find((r) => isRoomMatch(r, booking));
       if (matchedRoom) {
         supabase.from('rooms').update({ status: 'Available' }).eq('id', matchedRoom.id).then().catch(() => {});
