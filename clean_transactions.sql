@@ -60,3 +60,4 @@ UNION ALL
 SELECT 'staff_list (master - preserved)', count(*) FROM public.staff_list
 UNION ALL
 SELECT 'admin_users (master - preserved)', count(*) FROM public.admin_users;
+

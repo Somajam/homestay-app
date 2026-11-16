@@ -60,8 +60,8 @@ The app uses client-side routing. Direct navigation or refreshing URLs like `/bo
 
 ### Environment Variables on Vercel
 Ensure the following environment variables are configured in the **Vercel Project Settings > Environment Variables**:
-* `VITE_SUPABASE_URL`: `https://vbsvpvvatfoeybmdvuet.supabase.co`
-* `VITE_SUPABASE_ANON_KEY`: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` *(see Section 2)*
+* `VITE_SUPABASE_URL`: `https://mhfzsultlocaepkvyznp.supabase.co`
+* `VITE_SUPABASE_ANON_KEY`: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oZnpzdWx0bG9jYWVwa3Z5em5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2Mjc3MDgsImV4cCI6MjEwOTIwMzcwOH0.zWeDsyeNfA1fWjSS5iGMCs_CATu7ImtcEq0subggp4U`
 
 ---
 
@@ -69,15 +69,15 @@ Ensure the following environment variables are configured in the **Vercel Projec
 
 ### Project Configuration
 * **Database Provider:** [Supabase](https://supabase.com/) (PostgreSQL with Realtime REST & Storage)
-* **Project Reference ID:** `vbsvpvvatfoeybmdvuet`
-* **Project URL:** `https://vbsvpvvatfoeybmdvuet.supabase.co`
+* **Project Reference ID:** `mhfzsultlocaepkvyznp`
+* **Project URL:** `https://mhfzsultlocaepkvyznp.supabase.co`
 * **API Version:** `@supabase/supabase-js` v2
 
 ### Local Environment File (`.env.local`)
 The `.env.local` file in the project root contains the connection credentials:
 ```env
-VITE_SUPABASE_URL=https://vbsvpvvatfoeybmdvuet.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZic3ZwdnZhdGZvZXlibWR2dWV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3MzQ1OTYsImV4cCI6MjEwMzMxMDU5Nn0.n6U-Vu_xanxH_ncWHoQZBRFLlf06bUJ_CHFb9o4Y8yI
+VITE_SUPABASE_URL=https://mhfzsultlocaepkvyznp.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oZnpzdWx0bG9jYWVwa3Z5em5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2Mjc3MDgsImV4cCI6MjEwOTIwMzcwOH0.zWeDsyeNfA1fWjSS5iGMCs_CATu7ImtcEq0subggp4U
 ```
 
 ### Client Initialization
