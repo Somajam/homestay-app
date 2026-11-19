@@ -657,8 +657,12 @@ export const AppProvider = ({ children }) => {
         return updated;
       });
 
-      // Background Supabase sync
-      supabase.from('guests').update(mergedGuest).eq('id', existing.id).then().catch(() => {});
+      // Sync with Supabase
+      try {
+        await supabase.from('guests').update(mergedGuest).eq('id', existing.id);
+      } catch (e) {
+        console.warn('Supabase guest update notice:', e);
+      }
 
       return mergedGuest;
     }
@@ -675,10 +679,12 @@ export const AppProvider = ({ children }) => {
       return updated;
     });
 
-    // Background Supabase sync
-    supabase.from('guests').insert([newGuest]).then().catch((e) => {
+    // Sync with Supabase before returning so downstream records (bookings) have a valid foreign key
+    try {
+      await supabase.from('guests').insert([newGuest]);
+    } catch (e) {
       console.warn('Supabase guest insert notice:', e);
-    });
+    }
 
     return newGuest;
   };
