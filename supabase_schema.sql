@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   num_guests INT NOT NULL DEFAULT 2,
   status TEXT NOT NULL DEFAULT 'Confirmed',
   bill_amount NUMERIC,
+  actual_amount_received NUMERIC,
+  discount_amount NUMERIC DEFAULT 0,
   referred_by TEXT,
   referral_commission NUMERIC DEFAULT 0,
   room_expenses JSONB DEFAULT '[]'::jsonb,

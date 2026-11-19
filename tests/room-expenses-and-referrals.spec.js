@@ -28,7 +28,7 @@ test.describe('Room Extras, Billing Amount, Referral Commission & Checkout Settl
     await expect(page.locator('[data-testid="input-referral-commission"]')).toBeVisible();
 
     // Close modal
-    await page.locator('button:has-text("Cancel")').first().click();
+    await page.keyboard.press('Escape');
     await expect(page.locator('h3:has-text("New Cottage Reservation & Check-In")')).not.toBeVisible();
   });
 
@@ -66,12 +66,18 @@ test.describe('Room Extras, Billing Amount, Referral Commission & Checkout Settl
     // Verify referrer name is displayed in table
     await expect(page.getByText('Suresh Travel Desk').first()).toBeVisible();
 
-    // 6. Check In the booking
+    // 6. Check In the booking with rate adjustment / bargain at check-in
     const checkInBtn = page.locator('button:has-text("Check In")').first();
     await expect(checkInBtn).toBeVisible({ timeout: 5000 });
     await checkInBtn.click();
 
-    // Check-In modal opens
+    // Check-In modal opens - test rate adjustment input
+    await expect(page.locator('h3:has-text("Guest Check-In & Verification")')).toBeVisible({ timeout: 5000 });
+    const checkInBillInput = page.locator('[data-testid="input-checkin-bill-amount"]');
+    await expect(checkInBillInput).toBeVisible();
+    // Test quick discount chip or rate adjustment at check-in (e.g. from 4000 to 3800)
+    await checkInBillInput.fill('3800');
+
     const confirmCheckInBtn = page.locator('button:has-text("Confirm Check-In")');
     await expect(confirmCheckInBtn).toBeVisible({ timeout: 5000 });
     await confirmCheckInBtn.click();
@@ -110,10 +116,27 @@ test.describe('Room Extras, Billing Amount, Referral Commission & Checkout Settl
     // Verify Check-Out modal shows Grand Total with extras itemized
     await expect(page.locator('h3:has-text("Guest Check-Out & Bill Settlement")')).toBeVisible();
     await expect(page.getByText('Final Settlement Breakdown')).toBeVisible();
-    await expect(page.getByText('Total Amount Payable at Checkout:')).toBeVisible();
+    await expect(page.getByText('Total Standard Billed (Room + Extras):')).toBeVisible();
+    await expect(page.getByText('Actual Final Amount Received (₹)')).toBeVisible();
+
+    // Test Bargain / Discount at Check-Out:
+    const receivedAmountInput = page.locator('[data-testid="input-checkout-received-amount"]');
+    await expect(receivedAmountInput).toBeVisible();
+    // Test quick discount chip (-₹500)
+    const discount500Btn = page.locator('button:has-text("-₹500")');
+    if (await discount500Btn.isVisible()) {
+      await discount500Btn.click();
+      await expect(page.getByText('Discount / Bargain Given:')).toBeVisible();
+    }
 
     // 10. Complete check-out
     await page.locator('button:has-text("Settle Bill")').click();
     await expect(page.locator('h3:has-text("Guest Check-Out & Bill Settlement")')).not.toBeVisible({ timeout: 10000 });
+
+    // Switch to "Checked Out" tab to see checked-out records
+    await page.locator('button:has-text("Checked Out")').click();
+
+    // Verify settled amount and discount badge are visible in Bookings table
+    await expect(page.getByText('Settled:').first()).toBeVisible();
   });
 });

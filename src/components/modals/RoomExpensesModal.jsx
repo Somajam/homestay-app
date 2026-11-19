@@ -1,20 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { useApp } from '../../context/AppContext';
-import { Plus, Trash2, Receipt, BedDouble, Utensils, Flame, Coffee, Sparkles } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  Receipt,
+  BedDouble,
+  Utensils,
+  Flame,
+  Coffee,
+  Sparkles,
+  Edit2,
+  Check,
+  X,
+} from 'lucide-react';
 
 export const RoomExpensesModal = ({ isOpen, onClose, booking }) => {
-  const { addRoomExpense, removeRoomExpense } = useApp();
+  const { addRoomExpense, removeRoomExpense, updateBookingBill } = useApp();
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  const [isEditingStayRate, setIsEditingStayRate] = useState(false);
+  const [editRateValue, setEditRateValue] = useState('');
+
+  const roomStayBill = Number(booking?.bill_amount ?? booking?.total_amount ?? 0);
+
+  useEffect(() => {
+    if (booking) {
+      setEditRateValue(String(roomStayBill));
+      setIsEditingStayRate(false);
+    }
+  }, [booking?.id, roomStayBill]);
 
   if (!booking) return null;
 
   const expenses = Array.isArray(booking.room_expenses) ? booking.room_expenses : [];
   const extraExpensesTotal = expenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const roomStayBill = Number(booking.bill_amount ?? booking.total_amount ?? 0);
   const grandTotal = roomStayBill + extraExpensesTotal;
+
+  const handleSaveRate = async () => {
+    const parsed = Number(editRateValue);
+    if (!isNaN(parsed) && parsed >= 0) {
+      await updateBookingBill(booking.id, { bill_amount: parsed });
+      setIsEditingStayRate(false);
+    }
+  };
 
   const handleAdd = (e) => {
     e.preventDefault();
@@ -59,8 +90,51 @@ export const RoomExpensesModal = ({ isOpen, onClose, booking }) => {
             <h4 className="text-sm font-bold text-slate-100 mt-1">{booking.guest_name}</h4>
           </div>
           <div className="text-right sm:border-l sm:border-slate-800 sm:pl-4">
-            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold block">Stay Rate</span>
-            <span className="text-sm font-extrabold text-slate-200">₹{roomStayBill.toLocaleString()}</span>
+            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold block">Room Stay Rate</span>
+            {isEditingStayRate ? (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-xs text-slate-400 font-bold">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={editRateValue}
+                  onChange={(e) => setEditRateValue(e.target.value)}
+                  className="w-20 px-1.5 py-0.5 text-xs bg-slate-900 border border-emerald-500 rounded text-emerald-400 font-mono font-bold focus:outline-none"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveRate}
+                  className="p-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer"
+                  title="Save Rate"
+                >
+                  <Check className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingStayRate(false)}
+                  className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
+                  title="Cancel"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                <span className="text-sm font-extrabold text-slate-200">₹{roomStayBill.toLocaleString()}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditRateValue(String(roomStayBill));
+                    setIsEditingStayRate(true);
+                  }}
+                  className="p-1 rounded text-slate-400 hover:text-emerald-400 hover:bg-slate-900 transition-colors cursor-pointer"
+                  title="Edit Room Stay Rate"
+                >
+                  <Edit2 className="w-3 h-3" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

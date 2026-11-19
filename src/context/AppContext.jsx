@@ -31,13 +31,17 @@ export const normalizeBooking = (b) => {
   if (!b) return b;
   const stayAmt = b.bill_amount != null && b.bill_amount !== ''
     ? Number(b.bill_amount)
-    : (b.total_amount != null ? Number(b.total_amount) : 0);
+    : (b.total_amount != null ? Number(b.total_amount) : (b.total_price != null ? Number(b.total_price) : 0));
   return {
     ...b,
     bill_amount: stayAmt,
     referred_by: b.referred_by || '',
     referral_commission: Number(b.referral_commission) || 0,
     room_expenses: Array.isArray(b.room_expenses) ? b.room_expenses : [],
+    actual_amount_received: b.actual_amount_received != null && b.actual_amount_received !== ''
+      ? Number(b.actual_amount_received)
+      : null,
+    discount_amount: Number(b.discount_amount) || 0,
   };
 };
 
@@ -901,9 +905,20 @@ export const AppProvider = ({ children }) => {
     return true;
   };
 
-  const processCheckIn = async (bookingId, staffNotes = '') => {
+  const processCheckIn = async (bookingId, staffNotes = '', updatedBillAmount = null) => {
     const booking = bookings.find((b) => String(b.id) === String(bookingId));
     if (!booking) return;
+
+    // Check if bill amount was adjusted at check-in
+    let finalBill = booking.bill_amount != null ? Number(booking.bill_amount) : Number(booking.total_amount || 0);
+    let billAdjustedNote = '';
+    if (updatedBillAmount !== null && updatedBillAmount !== '' && !isNaN(Number(updatedBillAmount))) {
+      const parsedNewBill = Number(updatedBillAmount);
+      if (parsedNewBill !== finalBill) {
+        billAdjustedNote = ` [Bill Adjusted at Check-In: ₹${finalBill.toLocaleString()} → ₹${parsedNewBill.toLocaleString()}]`;
+        finalBill = parsedNewBill;
+      }
+    }
 
     const guestDocs = documents.filter((d) => d.guest_id === booking.guest_id);
     if (guestDocs.length === 0) {
@@ -914,13 +929,13 @@ export const AppProvider = ({ children }) => {
     }
 
     const updatedNotes = staffNotes
-      ? `${booking.notes || ''} | Check-in Notes: ${staffNotes}`
-      : booking.notes;
+      ? `${booking.notes || ''}${billAdjustedNote} | Check-in Notes: ${staffNotes}`
+      : `${booking.notes || ''}${billAdjustedNote}`;
     const checkInTimestamp = new Date().toISOString();
 
     const updatedBookings = bookings.map((b) =>
       String(b.id) === String(bookingId)
-        ? { ...b, status: 'Checked In', notes: updatedNotes, checked_in_at: checkInTimestamp }
+        ? { ...b, status: 'Checked In', bill_amount: finalBill, notes: updatedNotes, checked_in_at: checkInTimestamp }
         : b
     );
 
@@ -939,11 +954,12 @@ export const AppProvider = ({ children }) => {
       guest_name: booking.guest_name,
       room_number: booking.room_number,
       staff_notes: staffNotes,
+      bill_amount: finalBill,
       checked_in_at: checkInTimestamp,
     });
 
     try {
-      supabase.from('bookings').update({ status: 'Checked In', notes: updatedNotes }).eq('id', bookingId).then().catch(() => {});
+      supabase.from('bookings').update({ status: 'Checked In', notes: updatedNotes, bill_amount: finalBill }).eq('id', bookingId).then().catch(() => {});
       const matchedRoom = rooms.find((r) => isRoomMatch(r, booking));
       if (matchedRoom) {
         supabase.from('rooms').update({ status: 'Occupied' }).eq('id', matchedRoom.id).then().catch(() => {});
@@ -955,17 +971,40 @@ export const AppProvider = ({ children }) => {
     showToast(`Checked In successfully! Room marked OCCUPIED.`);
   };
 
-  const processCheckOut = async (bookingId, staffNotes = '') => {
+  const processCheckOut = async (bookingId, settlementOptions = '') => {
     const booking = bookings.find((b) => String(b.id) === String(bookingId));
     if (!booking) return;
+
+    let staffNotes = '';
+    let paymentMode = 'UPI';
+    let customReceived = null;
+    let customDiscount = null;
+
+    if (typeof settlementOptions === 'object' && settlementOptions !== null) {
+      staffNotes = settlementOptions.staffNotes || '';
+      paymentMode = settlementOptions.paymentMode || 'UPI';
+      customReceived = settlementOptions.actualAmountReceived != null ? Number(settlementOptions.actualAmountReceived) : null;
+      customDiscount = settlementOptions.discountAmount != null ? Number(settlementOptions.discountAmount) : null;
+    } else if (typeof settlementOptions === 'string') {
+      staffNotes = settlementOptions;
+    }
 
     const extraTotal = Array.isArray(booking.room_expenses)
       ? booking.room_expenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
       : 0;
     const roomStayBill = Number(booking.bill_amount ?? booking.total_amount ?? 0);
-    const grandTotal = roomStayBill + extraTotal;
+    const expectedGrandTotal = roomStayBill + extraTotal;
 
-    const settlementSummary = `Settled at Checkout: ₹${grandTotal.toLocaleString()} (Room Stay: ₹${roomStayBill.toLocaleString()}${extraTotal > 0 ? ` + Incidentals: ₹${extraTotal.toLocaleString()}` : ''})`;
+    const actualReceived = customReceived != null ? customReceived : expectedGrandTotal;
+    const discountGiven = customDiscount != null
+      ? customDiscount
+      : Math.max(0, expectedGrandTotal - actualReceived);
+
+    // If discount was given, adjust room stay bill so (roomStayBill + extras = actualReceived)
+    const adjustedRoomBill = Math.max(0, actualReceived - extraTotal);
+
+    const settlementSummary = `Settled at Checkout: Received ₹${actualReceived.toLocaleString()} via ${paymentMode}${discountGiven > 0 ? ` (Discount: ₹${discountGiven.toLocaleString()}, Billed: ₹${expectedGrandTotal.toLocaleString()})` : ''} | Room: ₹${adjustedRoomBill.toLocaleString()}${extraTotal > 0 ? ` + Incidentals: ₹${extraTotal.toLocaleString()}` : ''}`;
+
     const updatedNotes = staffNotes
       ? `${booking.notes || ''} | ${settlementSummary} | Notes: ${staffNotes}`
       : `${booking.notes || ''} | ${settlementSummary}`;
@@ -973,7 +1012,15 @@ export const AppProvider = ({ children }) => {
 
     const updatedBookings = bookings.map((b) =>
       String(b.id) === String(bookingId)
-        ? { ...b, status: 'Checked Out', notes: updatedNotes, checked_out_at: checkOutTimestamp }
+        ? {
+            ...b,
+            status: 'Checked Out',
+            notes: updatedNotes,
+            bill_amount: adjustedRoomBill,
+            actual_amount_received: actualReceived,
+            discount_amount: discountGiven,
+            checked_out_at: checkOutTimestamp,
+          }
         : b
     );
 
@@ -992,14 +1039,33 @@ export const AppProvider = ({ children }) => {
       guest_name: booking.guest_name,
       room_number: booking.room_number,
       staff_notes: staffNotes,
-      room_stay_bill: roomStayBill,
+      payment_mode: paymentMode,
+      expected_total: expectedGrandTotal,
+      actual_amount_received: actualReceived,
+      discount_amount: discountGiven,
+      room_stay_bill: adjustedRoomBill,
       room_expenses_total: extraTotal,
-      grand_total_settled: grandTotal,
+      grand_total_settled: actualReceived,
       checked_out_at: checkOutTimestamp,
     });
 
     try {
-      supabase.from('bookings').update({ status: 'Checked Out', notes: updatedNotes }).eq('id', bookingId).then().catch(() => {});
+      const updatePayload = {
+        status: 'Checked Out',
+        notes: updatedNotes,
+        bill_amount: adjustedRoomBill,
+        actual_amount_received: actualReceived,
+        discount_amount: discountGiven,
+      };
+
+      supabase.from('bookings').update(updatePayload).eq('id', bookingId).then(({ error }) => {
+        if (error) {
+          // Fallback if actual_amount_received / discount_amount aren't in Supabase schema cache yet
+          const { actual_amount_received, discount_amount, ...fallbackPayload } = updatePayload;
+          supabase.from('bookings').update(fallbackPayload).eq('id', bookingId).then().catch(() => {});
+        }
+      }).catch(() => {});
+
       const matchedRoom = rooms.find((r) => isRoomMatch(r, booking));
       if (matchedRoom) {
         supabase.from('rooms').update({ status: 'Available' }).eq('id', matchedRoom.id).then().catch(() => {});
@@ -1008,7 +1074,7 @@ export const AppProvider = ({ children }) => {
       console.error(e);
     }
 
-    showToast(`Checked Out successfully! Room marked AVAILABLE.`);
+    showToast(`Checked Out successfully! Collected ₹${actualReceived.toLocaleString()}. Room marked AVAILABLE.`);
   };
 
   // --- ROOM INCIDENTALS & EXTRA EXPENSES HANDLERS ---

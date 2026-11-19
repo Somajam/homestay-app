@@ -102,7 +102,23 @@ export const MonthlyFinancialReport = ({
     }, 0);
   }, [monthlyBookings]);
 
-  const totalGrossIncome = totalRoomBill + totalRoomExtras;
+  const totalDiscountsGiven = useMemo(() => {
+    return monthlyBookings.reduce((sum, b) => {
+      return sum + (Number(b.discount_amount) || 0);
+    }, 0);
+  }, [monthlyBookings]);
+
+  // Actual Gross Revenue Realized (takes actual_amount_received when settled, otherwise standard billed + extras)
+  const totalGrossIncome = useMemo(() => {
+    return monthlyBookings.reduce((sum, b) => {
+      if (b.actual_amount_received != null && !isNaN(Number(b.actual_amount_received))) {
+        return sum + Number(b.actual_amount_received);
+      }
+      const bill = b.bill_amount != null ? Number(b.bill_amount) : Number(b.total_amount || b.total_price || 0);
+      const extras = Array.isArray(b.room_expenses) ? b.room_expenses.reduce((s, x) => s + (Number(x.amount) || 0), 0) : 0;
+      return sum + (bill + extras);
+    }, 0);
+  }, [monthlyBookings]);
 
   const totalReferralCommission = useMemo(() => {
     return monthlyBookings.reduce((sum, b) => {
@@ -180,7 +196,9 @@ export const MonthlyFinancialReport = ({
     lines.push(`"EXECUTIVE P&L SUMMARY"`);
     lines.push(`"Total Room Stay Bill Amount (₹)",${totalRoomBill}`);
     lines.push(`"Total Room Extras / Incidentals (₹)",${totalRoomExtras}`);
-    lines.push(`"Total Gross Revenue / Income (₹)",${totalGrossIncome}`);
+    lines.push(`"Total Standard Billed (₹)",${totalRoomBill + totalRoomExtras}`);
+    lines.push(`"Total Discounts / Bargains Given (₹)",${totalDiscountsGiven}`);
+    lines.push(`"Total Net Realized Revenue / Income (₹)",${totalGrossIncome}`);
     lines.push(`"Total Operating Expenses (₹)",${totalExpenses}`);
     lines.push(`"Net Operating Profit / Surplus (₹)",${netProfit}`);
     lines.push(`"Operating Profit Margin (%)",${profitMargin}%`);
@@ -199,7 +217,7 @@ export const MonthlyFinancialReport = ({
     // Detailed Income Register
     lines.push(`"DETAILED REVENUE REGISTER (BOOKINGS)"`);
     lines.push(
-      `"Booking Ref","Guest Name","Cottage","Check-In","Check-Out","Nights","Guests","Status","Room Bill (₹)","Extras (₹)","Total Billed (₹)","Referred By","Referral Comm (₹)"`
+      `"Booking Ref","Guest Name","Cottage","Check-In","Check-Out","Nights","Guests","Status","Room Bill (₹)","Extras (₹)","Total Billed (₹)","Discount Given (₹)","Actual Received (₹)","Referred By","Referral Comm (₹)"`
     );
     monthlyBookings.forEach((b) => {
       const inDate = new Date(b.check_in_date);
@@ -212,9 +230,11 @@ export const MonthlyFinancialReport = ({
         ? b.room_expenses.reduce((s, x) => s + (Number(x.amount) || 0), 0)
         : 0;
       const total = billAmt + extras;
+      const disc = Number(b.discount_amount) || 0;
+      const received = b.actual_amount_received != null ? Number(b.actual_amount_received) : total;
 
       lines.push(
-        `"${b.booking_ref}","${(b.guest_name || '').replace(/"/g, '""')}","Cottage ${b.room_number}","${b.check_in_date}","${b.check_out_date}",${nights},${b.num_guests || 2},"${b.status}",${billAmt},${extras},${total},"${(b.referred_by || 'Direct').replace(/"/g, '""')}",${Number(b.referral_commission || 0)}`
+        `"${b.booking_ref}","${(b.guest_name || '').replace(/"/g, '""')}","Cottage ${b.room_number}","${b.check_in_date}","${b.check_out_date}",${nights},${b.num_guests || 2},"${b.status}",${billAmt},${extras},${total},${disc},${received},"${(b.referred_by || 'Direct').replace(/"/g, '""')}",${Number(b.referral_commission || 0)}`
       );
     });
     lines.push(``);
@@ -737,13 +757,15 @@ export const MonthlyFinancialReport = ({
                     <th className="p-3.5 text-right">Room Bill (₹)</th>
                     <th className="p-3.5 text-right">Extras (₹)</th>
                     <th className="p-3.5 text-right">Total Billed (₹)</th>
+                    <th className="p-3.5 text-right">Discount (₹)</th>
+                    <th className="p-3.5 text-right">Actual Received (₹)</th>
                     <th className="p-3.5">Referral Attribution</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-medium">
                   {filteredIncomeRows.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="p-8 text-center text-slate-500">
+                      <td colSpan="10" className="p-8 text-center text-slate-500">
                         No bookings found for {monthName} {selectedYear}.
                       </td>
                     </tr>
@@ -754,6 +776,8 @@ export const MonthlyFinancialReport = ({
                         ? b.room_expenses.reduce((s, x) => s + (Number(x.amount) || 0), 0)
                         : 0;
                       const total = billAmt + extras;
+                      const discount = Number(b.discount_amount) || 0;
+                      const actualRec = b.actual_amount_received != null ? Number(b.actual_amount_received) : total;
 
                       return (
                         <tr key={b.id} className="hover:bg-slate-800/40 transition-colors">
@@ -774,8 +798,14 @@ export const MonthlyFinancialReport = ({
                           <td className="p-3.5 text-right font-mono text-teal-400">
                             {extras > 0 ? `+ ₹${extras.toLocaleString('en-IN')}` : '—'}
                           </td>
-                          <td className="p-3.5 text-right font-mono font-extrabold text-emerald-400">
+                          <td className="p-3.5 text-right font-mono text-slate-300">
                             ₹{total.toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-3.5 text-right font-mono text-amber-400">
+                            {discount > 0 ? `- ₹${discount.toLocaleString('en-IN')}` : '—'}
+                          </td>
+                          <td className="p-3.5 text-right font-mono font-extrabold text-emerald-400">
+                            ₹{actualRec.toLocaleString('en-IN')}
                           </td>
                           <td className="p-3.5 text-[11px]">
                             {b.referred_by ? (
@@ -807,6 +837,12 @@ export const MonthlyFinancialReport = ({
                       </td>
                       <td className="p-3.5 text-right font-mono text-teal-400">
                         + ₹{totalRoomExtras.toLocaleString('en-IN')}
+                      </td>
+                      <td className="p-3.5 text-right font-mono text-slate-300">
+                        ₹{(totalRoomBill + totalRoomExtras).toLocaleString('en-IN')}
+                      </td>
+                      <td className="p-3.5 text-right font-mono text-amber-400">
+                        {totalDiscountsGiven > 0 ? `- ₹${totalDiscountsGiven.toLocaleString('en-IN')}` : '₹0'}
                       </td>
                       <td className="p-3.5 text-right font-mono text-emerald-400 text-sm">
                         ₹{totalGrossIncome.toLocaleString('en-IN')}

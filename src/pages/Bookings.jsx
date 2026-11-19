@@ -284,6 +284,8 @@ export const Bookings = () => {
                         const billAmt = b.bill_amount != null ? Number(b.bill_amount) : (Number(b.total_amount) || 0);
                         const extras = Array.isArray(b.room_expenses) ? b.room_expenses : [];
                         const extrasTotal = extras.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                        const discount = Number(b.discount_amount) || 0;
+                        const actualReceived = b.actual_amount_received != null ? Number(b.actual_amount_received) : null;
                         return (
                           <div className="mt-1 space-y-0.5">
                             <div className="text-[11px] font-mono font-bold text-emerald-400">
@@ -297,6 +299,16 @@ export const Bookings = () => {
                             {extrasTotal > 0 && (
                               <div className="text-[10px] font-mono text-amber-400 font-semibold">
                                 + ₹{extrasTotal.toLocaleString('en-IN')} extras ({extras.length})
+                              </div>
+                            )}
+                            {discount > 0 && (
+                              <div className="text-[10px] font-mono text-rose-400 font-medium">
+                                Disc: -₹{discount.toLocaleString('en-IN')}
+                              </div>
+                            )}
+                            {actualReceived != null && b.status === 'Checked Out' && (
+                              <div className="text-[10px] font-mono text-cyan-300 font-bold">
+                                Settled: ₹{actualReceived.toLocaleString('en-IN')}
                               </div>
                             )}
                             {b.referred_by && (

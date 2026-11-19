@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { useApp } from '../../context/AppContext';
 import {
@@ -13,6 +13,9 @@ import {
   Trash2,
   Loader2,
   Image as ImageIcon,
+  Receipt,
+  Tag,
+  RotateCcw,
 } from 'lucide-react';
 
 export const CheckInModal = ({ isOpen, onClose, booking }) => {
@@ -21,6 +24,19 @@ export const CheckInModal = ({ isOpen, onClose, booking }) => {
   const [staffNotes, setStaffNotes] = useState('');
   const [verifiedId, setVerifiedId] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Bill amount adjustment state
+  const originalBill = booking ? Number(booking.bill_amount ?? booking.total_amount ?? 0) : 0;
+  const [billAmount, setBillAmount] = useState('');
+  const [isBillEdited, setIsBillEdited] = useState(false);
+
+  useEffect(() => {
+    if (booking) {
+      const initialAmt = String(booking.bill_amount ?? booking.total_amount ?? 0);
+      setBillAmount(initialAmt);
+      setIsBillEdited(false);
+    }
+  }, [booking]);
 
   // Guest & ID Completion fields
   const guestObj = booking ? guests.find((g) => g.id === booking.guest_id) : null;
@@ -99,7 +115,7 @@ export const CheckInModal = ({ isOpen, onClose, booking }) => {
       }
 
       // 3. Complete Check-In
-      await processCheckIn(booking.id, staffNotes);
+      await processCheckIn(booking.id, staffNotes, billAmount);
       setStagedFiles([]);
       onClose();
     } catch (err) {
@@ -131,6 +147,76 @@ export const CheckInModal = ({ isOpen, onClose, booking }) => {
             <div>Check-out: <strong className="text-slate-200">{booking.check_out_date}</strong></div>
             <div>Guests: <strong className="text-slate-200">{booking.num_guests} Person(s)</strong></div>
           </div>
+        </div>
+
+        {/* Room Stay Billing Rate Adjustment at Check-In */}
+        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+            <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <Receipt className="w-3.5 h-3.5 text-emerald-400" />
+              Agreed Room Stay Bill Amount (₹)
+            </label>
+            {isBillEdited && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBillAmount(String(originalBill));
+                  setIsBillEdited(false);
+                }}
+                className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset (₹{originalBill.toLocaleString()})
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">₹</span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                data-testid="input-checkin-bill-amount"
+                value={billAmount}
+                onChange={(e) => {
+                  setBillAmount(e.target.value);
+                  setIsBillEdited(true);
+                }}
+                placeholder={String(originalBill)}
+                className="w-full pl-7 pr-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            {/* Quick discount chips */}
+            <div className="flex items-center gap-1">
+              {[200, 500, 1000].map((disc) => (
+                <button
+                  key={disc}
+                  type="button"
+                  onClick={() => {
+                    const newAmt = Math.max(0, originalBill - disc);
+                    setBillAmount(String(newAmt));
+                    setIsBillEdited(true);
+                  }}
+                  className="px-2 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-amber-300 text-[10px] font-semibold border border-slate-800 transition-colors"
+                >
+                  -₹{disc}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Notice if adjusted */}
+          {isBillEdited && Number(billAmount) !== originalBill && (
+            <div className="text-[11px] flex items-center justify-between text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+              <span>Rate Adjusted at Check-In:</span>
+              <span className="font-mono font-bold">
+                ₹{Number(billAmount).toLocaleString()} (Original: ₹{originalBill.toLocaleString()})
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Document Verification Compliance Alert */}

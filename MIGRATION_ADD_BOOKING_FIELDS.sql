@@ -4,6 +4,8 @@
 -- ====================================================================
 
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS bill_amount NUMERIC;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS actual_amount_received NUMERIC;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS discount_amount NUMERIC DEFAULT 0;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS referred_by TEXT;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS referral_commission NUMERIC DEFAULT 0;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS room_expenses JSONB DEFAULT '[]'::jsonb;
